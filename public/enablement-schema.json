@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Enablement",
+  "type": "object",
+  "properties": {
+    "status": {
+      "enum": [
+        "FLAG_CONTROLLED",
+        "ENABLED",
+        "DISABLED"
+      ]
+    }
+  },
+  "required": [
+    "status"
+  ],
+  "if": {
+    "properties": {
+      "status": {
+        "const": "FLAG_CONTROLLED"
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "flags": {
+        "oneOf": [
+          {
+            "properties": {
+              "title": "Product flag",
+              "productFlag": {
+                "$ref": "#/$defs/productFlag"
+              }
+            },
+            "required": [
+              "productFlag"
+            ]
+          },
+          {
+            "properties": {
+              "title": "LaunchDarkly feature flag",
+              "ldFeatureFlag": {
+                "$ref": "#/$defs/ldFeatureFlag"
+              }
+            },
+            "required": [
+              "ldFeatureFlag"
+            ]
+          },
+          {
+            "properties": {
+              "or": {
+                "$ref": "#/$defs/logicArray"
+              }
+            },
+            "required": [
+              "or"
+            ]
+          },
+          {
+            "properties": {
+              "and": {
+                "$ref": "#/$defs/logicArray"
+              }
+            },
+            "required": [
+              "and"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "logicArray": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "anyOf": [
+          {
+            "properties": {
+              "productFlag": {
+                "$ref": "#/$defs/productFlag"
+              }
+            },
+            "required": [
+              "productFlag"
+            ]
+          },
+          {
+            "properties": {
+              "ldFeatureFlag": {
+                "$ref": "#/$defs/ldFeatureFlag"
+              }
+            },
+            "required": [
+              "ldFeatureFlag"
+            ]
+          },
+          {
+            "properties": {
+              "or": {
+                "$ref": "#/$defs/logicArray"
+              }
+            },
+            "required": [
+              "or"
+            ]
+          },
+          {
+            "properties": {
+              "and": {
+                "$ref": "#/$defs/logicArray"
+              }
+            },
+            "required": [
+              "and"
+            ]
+          }
+        ]
+      },
+      "minItems": 2
+    },
+    "productFlag": {
+      "type": "string"
+    },
+    "ldFeatureFlag": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "booleanEquals": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "booleanEquals"
+      ]
+    }
+  }
+}
