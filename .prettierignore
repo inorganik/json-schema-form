@@ -1,0 +1,6 @@
+node_modules/*
+dist/*
+test-output/*
+e2e/target/*
+jest/index.ts
+src/polyfills.ts
