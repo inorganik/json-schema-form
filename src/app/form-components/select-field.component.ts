@@ -4,15 +4,20 @@ import { ReactiveFormsModule } from '@angular/forms';
 import { FieldConfig } from '../models/form-models';
 
 @Component({
-	selector: 'app-text-input-field',
+	selector: 'app-select-field',
 	imports: [CommonModule, ReactiveFormsModule],
 	template: `
 		<div class="form-field">
 			<label class="field-label">
 				{{ config.label }}
-				<span *ngIf="config.required" class="required">*</span>
+				<span *ngIf="config.validations.required" class="required">*</span>
 			</label>
-			<input [type]="config.type" [formControl]="config.controlRef" class="text-input" />
+			<select [formControl]="config.controlRef" class="select-input">
+				<option [value]="null">Select an option</option>
+				@for (option of config.options; track $index) {
+				<option [value]="option.value">{{ option.label }}</option>
+				}
+			</select>
 			<small *ngIf="config.description" class="description">
 				{{ config.description }}
 			</small>
@@ -37,20 +42,22 @@ import { FieldConfig } from '../models/form-models';
 				color: red;
 				margin-left: 0.25rem;
 			}
-			.text-input {
+			.select-input {
 				width: 100%;
 				padding: 0.5rem;
 				border: 1px solid #ccc;
 				border-radius: 4px;
 				font-size: 1rem;
+				background-color: white;
+				cursor: pointer;
 				box-sizing: border-box;
 			}
-			.text-input:focus {
+			.select-input:focus {
 				outline: none;
 				border-color: #007bff;
 				box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
 			}
-			.text-input:disabled {
+			.select-input:disabled {
 				background-color: #e9ecef;
 				cursor: not-allowed;
 			}
@@ -68,10 +75,10 @@ import { FieldConfig } from '../models/form-models';
 		`,
 	],
 })
-export class TextInputFieldComponent {
+export class SelectFieldComponent {
 	@Input() config: FieldConfig;
 
 	ngOnInit() {
-		// console.log('text-input', this.config);
+		// console.log('select', this.config);
 	}
 }
