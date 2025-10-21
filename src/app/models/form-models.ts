@@ -1,4 +1,5 @@
 import { FormArray, FormControl, FormGroup } from '@angular/forms';
+import { JsonSchema } from './schema-models';
 
 export enum FieldType {
 	'select',
@@ -21,6 +22,20 @@ export interface FieldValidations {
 	exclusiveMinimum?: number;
 }
 
+/**
+ * Holds metadata for conditionally rendered schemas based on field values
+ */
+export interface ConditionalSchema {
+	// The value that triggers this schema to be added
+	triggerValue?: any;
+	// The value(s) that trigger this schema to be removed
+	removeTriggerValue?: any;
+	// The schema to add when triggered
+	schema: JsonSchema;
+	// Keys of fields/groups/arrays added by this conditional schema (for removal tracking)
+	addedKeys?: string[];
+}
+
 export interface FieldConfig {
 	label: string;
 	controlRef: FormControl;
@@ -28,7 +43,9 @@ export interface FieldConfig {
 	type: FieldType;
 	description?: string;
 	options?: any[];
-	validations: FieldValidations;
+	validations?: FieldValidations;
+	parent: FieldGroup | FieldArray;
+	conditionalSchemas?: ConditionalSchema[];
 }
 
 export interface FieldGroup {
@@ -37,8 +54,9 @@ export interface FieldGroup {
 	key: string;
 	type: FieldType;
 	fields: { [key: string]: FieldConfig | FieldGroup | FieldArray };
-	// todo: add handler function which would take the form value
-	// and conditonally add fields based on conditional schemas
+	validations?: FieldValidations;
+	parent: FieldGroup | FieldArray | null;
+	conditionalSchemas?: ConditionalSchema[];
 }
 
 export interface FieldArrayValidations {
@@ -49,11 +67,12 @@ export interface FieldArrayValidations {
 export interface FieldArray {
 	label: string;
 	arrayRef?: FormArray;
-	type: FieldType;
 	key: string;
+	type: FieldType;
+	description?: string;
 	items: Array<FieldConfig | FieldGroup | FieldArray>;
-	minItems?: number;
-	maxItems?: number;
-	// todo: add handler function which would take the value
-	// and conditonally add fields based on conditional schemas
+	validations?: FieldArrayValidations;
+	canAddItem: () => boolean;
+	parent: FieldGroup | FieldArray;
+	conditionalSchemas?: ConditionalSchema[];
 }
