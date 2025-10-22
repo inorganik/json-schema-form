@@ -1,6 +1,5 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
-import { FormControl } from '@angular/forms';
 import { FieldArray, FieldConfig, FieldGroup, FieldType } from '../models/form-models';
 import { FieldArrayComponent } from './field-array.component';
 import { FieldComponent } from './field.component';
@@ -14,9 +13,9 @@ import { FieldComponent } from './field.component';
 				<legend>{{ config.label }}</legend>
 				<div class="group-fields">
 					@for (field of fieldEntries; track field.key) { @switch (field.fieldConfig.type)
-					{ @case (FieldType.group) {
+					{ @case (FieldType.Group) {
 					<app-field-group [config]="asFieldGroup(field.fieldConfig)" />
-					} @case (FieldType.array) {
+					} @case (FieldType.Array) {
 					<app-field-array [config]="asFieldArray(field.fieldConfig)" />
 					} @default {
 					<app-field [config]="asField(field.fieldConfig)" />
@@ -49,7 +48,6 @@ import { FieldComponent } from './field.component';
 })
 export class FieldGroupComponent {
 	@Input() config: FieldGroup;
-	@Input() control: FormControl;
 
 	// Expose FieldType enum to template
 	FieldType = FieldType;

@@ -12,7 +12,7 @@ import { FieldConfig } from '../models/form-models';
 				<input type="checkbox" [formControl]="config.controlRef" class="checkbox-input" />
 				<span class="checkbox-label">
 					{{ config.label }}
-					<span *ngIf="config.validations.required" class="required">*</span>
+					<span *ngIf="config.validations?.required" class="required">*</span>
 				</span>
 			</label>
 			<small *ngIf="config.description" class="description">

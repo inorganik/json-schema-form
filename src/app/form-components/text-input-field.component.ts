@@ -10,13 +10,16 @@ import { FieldConfig } from '../models/form-models';
 		<div class="form-field">
 			<label class="field-label">
 				{{ config.label }}
-				<span *ngIf="config.validations.required" class="required">*</span>
+				<span *ngIf="config.validations?.required" class="required">*</span>
 			</label>
 			<input [type]="config.type" [formControl]="config.controlRef" class="text-input" />
 			<small *ngIf="config.description" class="description">
 				{{ config.description }}
 			</small>
-			<div *ngIf="config.controlRef.errors" class="error-message">
+			<div
+				*ngIf="config.controlRef.touched && config.controlRef.errors"
+				class="error-message"
+			>
 				<span *ngFor="let error of config.controlRef.errors | keyvalue">
 					{{ error.key }}: {{ error.value }}
 				</span>

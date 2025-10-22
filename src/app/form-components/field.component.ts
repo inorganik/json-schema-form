@@ -16,15 +16,15 @@ import { TextInputFieldComponent } from './text-input-field.component';
 		RadioFieldComponent,
 	],
 	template: `
-		@switch (config.type) { @case (FieldType.select) {
+		@switch (config.type) { @case (FieldType.Select) {
 		<app-select-field [config]="config" />
-		} @case (FieldType.radio) {
+		} @case (FieldType.Radio) {
 		<app-radio-field [config]="config" />
-		} @case (FieldType.text) {
+		} @case (FieldType.Text) {
 		<app-text-input-field [config]="config" />
-		} @case (FieldType.number) {
+		} @case (FieldType.Number) {
 		<app-text-input-field [config]="config" />
-		} @case (FieldType.checkbox) {
+		} @case (FieldType.Checkbox) {
 		<app-checkbox-field [config]="config" />
 		} }
 	`,

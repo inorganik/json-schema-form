@@ -13,9 +13,9 @@ import { FieldComponent } from './field.component';
 			<label>{{ config.label }}</label>
 			<div class="array-item">
 				@for (item of config.items; track $index) { @switch (item.type) { @case
-				(FieldType.group) {
+				(FieldType.Group) {
 				<app-field-group [config]="asFieldGroup(item)" />
-				} @case (FieldType.array) {
+				} @case (FieldType.Array) {
 				<app-field-array [config]="asFieldArray(item)" />
 				} @default {
 				<app-field [config]="asField(item)" />

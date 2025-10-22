@@ -10,7 +10,7 @@ import { FieldConfig } from '../models/form-models';
 		<div class="form-field">
 			<label class="field-label">
 				{{ config.label }}
-				<span *ngIf="config.validations.required" class="required">*</span>
+				<span *ngIf="config.validations?.required" class="required">*</span>
 			</label>
 			<div class="radio-group">
 				@for (option of config.options; track $index) {

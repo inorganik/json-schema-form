@@ -2,13 +2,13 @@ import { FormArray, FormControl, FormGroup } from '@angular/forms';
 import { JsonSchema } from './schema-models';
 
 export enum FieldType {
-	'select',
-	'radio',
-	'number',
-	'text',
-	'checkbox',
-	'group',
-	'array',
+	Select = 'select',
+	Radio = 'radio',
+	Number = 'number',
+	Text = 'text',
+	Checkbox = 'checkbox',
+	Group = 'group',
+	Array = 'array',
 }
 
 export interface FieldValidations {
@@ -42,7 +42,7 @@ export interface FieldConfig {
 	key: string;
 	type: FieldType;
 	description?: string;
-	options?: any[];
+	options?: { label: string; value: any }[];
 	validations?: FieldValidations;
 	parent: FieldGroup | FieldArray;
 	conditionalSchemas?: ConditionalSchema[];
@@ -71,6 +71,7 @@ export interface FieldArray {
 	type: FieldType;
 	description?: string;
 	items: Array<FieldConfig | FieldGroup | FieldArray>;
+	itemSchema?: JsonSchema; // Schema template for array items
 	validations?: FieldArrayValidations;
 	canAddItem: () => boolean;
 	parent: FieldGroup | FieldArray;
