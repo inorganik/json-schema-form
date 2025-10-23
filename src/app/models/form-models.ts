@@ -50,7 +50,7 @@ export interface FieldConfig {
 
 export interface FieldGroup {
 	label: string;
-	groupRef?: FormGroup;
+	groupRef: FormGroup;
 	key: string;
 	type: FieldType;
 	fields: { [key: string]: FieldConfig | FieldGroup | FieldArray };
@@ -66,7 +66,7 @@ export interface FieldArrayValidations {
 
 export interface FieldArray {
 	label: string;
-	arrayRef?: FormArray;
+	arrayRef: FormArray;
 	key: string;
 	type: FieldType;
 	description?: string;

@@ -9,32 +9,19 @@ import { JsonSchema } from '../models/schema-models';
 })
 export class SchemaService {
 	private subscriptions = new Map<string, Subscription>();
+	private rootSchema: JsonSchema | null = null;
 
 	constructor() {}
 
+	/**
+	 * Converts a schema to a field group config. Traverses the schema, adding
+	 * configs (FieldConfig, FieldGroup or FieldArray) for each item.
+	 *
+	 * Returns the root FieldGroup representing the entire form
+	 */
 	schemaToFieldConfig(schema: JsonSchema): FieldGroup {
-		/**
-		 * Converts a schema to a field group config. Traverses the schema, adding
-		 * configs (FieldConfig, FieldGroup or FieldArray) for each item.
-		 *
-		 * It will follow these rules for each item traversed:
-		 *
-		 * - properties: add fields/arrays/groups for each item
-		 * - for types of each schema, use the following:
-		 *   • 'object': FieldGroup - use addGroup
-		 *   • 'array': FieldArray - use addArray
-		 *   • all other types: FieldConfig - use addField
-		 * - allOf: include all the properties at the same level as allOf
-		 * - anyOf: add a type "checkbox" field config for each schema in the anyOf. Store schemas
-		 *   in conditionalSchemas array. Setup valueChanges handler to call handleConditionalSchemas
-		 * - oneOf: add a type "radio" field config with options for each schema. Store schemas
-		 *   in conditionalSchemas array. Setup valueChanges handler to call handleConditionalSchemas
-		 * - if/then/else: store then/else schemas in conditionalSchemas of the field referenced in "if".
-		 *   Setup valueChanges handler on that field to call handleConditionalSchemas
-		 *
-		 * Returns the root FieldGroup representing the entire form
-		 *
-		 */
+		// Store the root schema for resolving $refs
+		this.rootSchema = schema;
 
 		// Create the root field group
 		const rootGroup: FieldGroup = {
@@ -52,106 +39,128 @@ export class SchemaService {
 			rootGroup.validations = { required: true };
 		}
 
-		// Process allOf - merge all schemas at the same level
-		if (schema.allOf) {
-			for (const allOfSchema of schema.allOf) {
-				if (allOfSchema.properties) {
-					this.processSchemaProperties(allOfSchema, rootGroup);
-				}
+		// Process the schema (handles allOf, properties, anyOf, oneOf, if/then/else)
+		this.processSchema(schema, rootGroup);
+
+		return rootGroup;
+	}
+
+	/**
+	 * Resolves a $ref path to get the referenced schema from $defs or definitions.
+	 * Supports JSON Pointer format like "#/$defs/productFlag" or "#/definitions/productFlag"
+	 *
+	 * @param ref The $ref string (e.g., "#/$defs/productFlag")
+	 * @returns The resolved schema or null if not found
+	 */
+	private resolveRef(ref: string): JsonSchema | null {
+		if (!this.rootSchema || !ref.startsWith('#/')) {
+			return null;
+		}
+
+		// Remove the leading "#/" and split the path
+		const path = ref.substring(2).split('/');
+
+		// Navigate through the path to find the referenced schema
+		let current: any = this.rootSchema;
+		for (const segment of path) {
+			if (current && typeof current === 'object' && segment in current) {
+				current = current[segment];
+			} else {
+				console.warn(`Could not resolve $ref: ${ref}`);
+				return null;
 			}
 		}
 
-		// Process regular properties
+		return current as JsonSchema;
+	}
+
+	/**
+	 * Processes a schema to handle oneOf, anyOf, and if/then/else conditional logic.
+	 * This method is called from schemaToFieldConfig, addGroup, and addArray to handle
+	 * nested conditional schemas at any level.
+	 *
+	 * Handles root-level schema keywords:
+	 * - allOf: merges all schemas at the same level
+	 * - anyOf: creates checkbox fields for each option with conditional schemas
+	 * - oneOf: creates a radio field with options and conditional schemas
+	 * - if/then/else: adds conditional schemas to the referenced field
+	 * - properties: processes each property (which may also have conditionals)
+	 *
+	 * @param schema The JSON schema to process
+	 * @param parent The parent FieldGroup or FieldArray to add fields to
+	 * @param key Optional key to use for oneOf/anyOf fields (when processing a property)
+	 */
+	private processSchema(schema: JsonSchema, parent: FieldGroup | FieldArray, key?: string): void {
+		console.log('process schema', schema, 'key:', key);
+
+		// Handle $ref - resolve and process the referenced schema
+		if (schema.$ref) {
+			const resolvedSchema = this.resolveRef(schema.$ref);
+			if (resolvedSchema) {
+				// Process the resolved schema with the same parent and key
+				this.processSchema(resolvedSchema, parent, key);
+			}
+			return;
+		}
+
+		// Process allOf - merge all schemas at the same level
+		if (schema.allOf) {
+			for (const allOfSchema of schema.allOf) {
+				// Recursively process each allOf schema to handle nested conditionals
+				this.processSchema(allOfSchema, parent);
+			}
+		}
+
+		// Handle anyOf - create checkbox fields for each option
+		if (schema.anyOf) {
+			this.handleAnyOf(schema, parent, key);
+		}
+
+		// Handle oneOf - create radio field with options
+		if (schema.oneOf) {
+			this.handleOneOf(schema, parent, key);
+		}
+
+		// Process regular properties FIRST (before if/then/else)
 		if (schema.properties) {
-			for (const [key, propertySchema] of Object.entries(schema.properties)) {
-				// Handle anyOf - create checkbox fields
-				if (propertySchema.anyOf) {
-					for (let i = 0; i < propertySchema.anyOf.length; i++) {
-						const anyOfSchema = propertySchema.anyOf[i];
-						const checkboxKey = `${key}_anyOf_${i}`;
-
-						// Create a checkbox field for this anyOf option
-						const checkboxSchema: JsonSchema = {
-							type: 'boolean',
-							title: anyOfSchema.title || `${key} option ${i + 1}`,
-						};
-
-						this.addField(checkboxSchema, rootGroup, checkboxKey);
-
-						// Get the field we just added and set up conditional schemas
-						const checkboxField = rootGroup.fields[checkboxKey] as FieldConfig;
-						if (checkboxField && checkboxField.conditionalSchemas) {
-							checkboxField.conditionalSchemas.push({
-								triggerValue: true,
-								removeTriggerValue: false,
-								schema: anyOfSchema,
-								addedKeys: [],
-							});
-						}
+			for (const [propKey, propertySchema] of Object.entries(schema.properties)) {
+				// Handle $ref in property schema
+				let actualSchema = propertySchema;
+				if (propertySchema.$ref) {
+					const resolvedSchema = this.resolveRef(propertySchema.$ref);
+					if (resolvedSchema) {
+						actualSchema = resolvedSchema;
 					}
+				}
+
+				// Check if property has conditional keywords - process recursively with key
+				if (actualSchema.anyOf || actualSchema.oneOf) {
+					this.processSchema(actualSchema, parent, propKey);
 					continue;
 				}
 
-				// Handle oneOf - create radio field with options
-				if (propertySchema.oneOf) {
-					const options = propertySchema.oneOf.map((schema, i) => {
-						const titleFromProps = schema.properties
-							? Object.values(schema.properties)[0]?.title
-							: undefined;
-						return {
-							label: schema.title || titleFromProps || `Option ${i + 1}`,
-							value: i,
-						};
-					});
-
-					const radioSchema: JsonSchema = {
-						type: 'string',
-						title: propertySchema.title || key,
-						enum: options.map(opt => opt.value),
-					};
-
-					this.addField(radioSchema, rootGroup, key);
-
-					// Get the field we just added and set up conditional schemas
-					const radioField = rootGroup.fields[key] as FieldConfig;
-					if (radioField && radioField.conditionalSchemas) {
-						// Override the field type to be radio
-						radioField.type = FieldType.Radio;
-						radioField.options = options;
-
-						// Add conditional schemas for each oneOf option
-						for (let i = 0; i < propertySchema.oneOf.length; i++) {
-							radioField.conditionalSchemas.push({
-								triggerValue: i,
-								schema: propertySchema.oneOf[i],
-								addedKeys: [],
-							});
-						}
-					}
-					continue;
-				}
-
-				// Regular property - process normally
-				const schemaType = Array.isArray(propertySchema.type)
-					? propertySchema.type[0]
-					: propertySchema.type;
+				// Regular property - process normally based on type
+				const schemaType = Array.isArray(actualSchema.type)
+					? actualSchema.type[0]
+					: actualSchema.type;
 
 				if (schemaType === 'object') {
-					this.addGroup(propertySchema, rootGroup, key);
+					this.addGroup(actualSchema, parent, propKey);
 				} else if (schemaType === 'array') {
-					this.addArray(propertySchema, rootGroup, key);
+					this.addArray(actualSchema, parent, propKey);
 				} else {
-					this.addField(propertySchema, rootGroup, key);
+					this.addField(actualSchema, parent, propKey);
 				}
 			}
 		}
 
 		// Handle if/then/else - add conditional schemas to the field referenced in "if"
+		// This is processed AFTER properties so the referenced field exists
 		if (schema.if && schema.then) {
 			// Find the field referenced in the "if" condition
 			if (schema.if.properties) {
 				for (const [ifKey, ifSchema] of Object.entries(schema.if.properties)) {
-					const field = rootGroup.fields[ifKey] as FieldConfig;
+					const field = (parent as FieldGroup).fields[ifKey] as FieldConfig;
 					if (field && field.conditionalSchemas) {
 						// Get the condition value (const value in the if schema)
 						const conditionValue = ifSchema.const;
@@ -173,23 +182,200 @@ export class SchemaService {
 								addedKeys: [],
 							});
 						}
+					} else {
+						console.warn('Field not found or has no conditionalSchemas:', ifKey, field);
 					}
 				}
 			}
 		}
+	}
 
-		return rootGroup;
+	/**
+	 * Handles anyOf schema logic by creating checkbox fields for each option.
+	 * Each checkbox controls whether its associated schema is applied.
+	 *
+	 * @param schema The JSON schema containing anyOf
+	 * @param parent The parent FieldGroup or FieldArray to add fields to
+	 * @param key Optional key to use for the anyOf fields (when processing a property)
+	 */
+	private handleAnyOf(schema: JsonSchema, parent: FieldGroup | FieldArray, key?: string): void {
+		const baseKey = key || 'anyOf';
+
+		// When we have a key (property name), create a group for it
+		if (key && parent.type === FieldType.Group) {
+			// Create a group for this property
+			const groupSchema: JsonSchema = {
+				type: 'object',
+				title: schema.title || baseKey,
+				properties: {},
+			};
+			this.addGroup(groupSchema, parent, key);
+			const targetGroup = (parent as FieldGroup).fields[key] as FieldGroup;
+
+			// Create checkbox fields for each anyOf option
+			// These controls are NOT added to the FormGroup, so they won't appear in form value
+			for (let i = 0; i < schema.anyOf!.length; i++) {
+				const anyOfSchema = schema.anyOf![i];
+				const checkboxKey = `${baseKey}_anyOf_${i}`;
+
+				// Create a control for the checkbox (not added to FormGroup)
+				const conditionalControl = new FormControl(false);
+
+				const checkboxField: FieldConfig = {
+					label: anyOfSchema.title || `${baseKey} option ${i + 1}`,
+					controlRef: conditionalControl,
+					key: checkboxKey,
+					type: FieldType.Checkbox,
+					parent: targetGroup,
+					conditionalSchemas: [
+						{
+							triggerValue: true,
+							removeTriggerValue: false,
+							schema: anyOfSchema,
+							addedKeys: [],
+						},
+					],
+				};
+
+				// Add the field to the target group (but not to the FormGroup)
+				targetGroup.fields[checkboxKey] = checkboxField;
+
+				// Set up valueChanges subscription for conditional logic
+				const subscription = conditionalControl.valueChanges.subscribe(value => {
+					this.handleConditionalSchemas(checkboxField, value, targetGroup);
+				});
+				this.subscriptions.set(`${key}.${checkboxKey}`, subscription);
+			}
+		} else {
+			// Legacy behavior: add checkboxes directly to parent (no key provided)
+			console.log('NO PARENT KEY anyOf handling', schema);
+			for (let i = 0; i < schema.anyOf!.length; i++) {
+				const anyOfSchema = schema.anyOf![i];
+				const checkboxKey = `${baseKey}_anyOf_${i}`;
+
+				const checkboxSchema: JsonSchema = {
+					type: 'boolean',
+					title: anyOfSchema.title || `${baseKey} option ${i + 1}`,
+				};
+
+				this.addField(checkboxSchema, parent, checkboxKey);
+
+				const checkboxField = (parent as FieldGroup).fields[checkboxKey] as FieldConfig;
+				if (checkboxField && checkboxField.conditionalSchemas) {
+					checkboxField.conditionalSchemas.push({
+						triggerValue: true,
+						removeTriggerValue: false,
+						schema: anyOfSchema,
+						addedKeys: [],
+					});
+				}
+			}
+		}
+	}
+
+	/**
+	 * Handles oneOf schema logic by creating a radio field with options.
+	 * The radio field selection determines which schema is applied.
+	 *
+	 * @param schema The JSON schema containing oneOf
+	 * @param parent The parent FieldGroup or FieldArray to add fields to
+	 * @param key Optional key to use for the oneOf field (when processing a property)
+	 */
+	private handleOneOf(schema: JsonSchema, parent: FieldGroup | FieldArray, key?: string): void {
+		const baseKey = key || 'oneOf';
+
+		// When we have a key (property name), create a group for it
+		if (key && parent.type === FieldType.Group) {
+			// Create a group for this property
+			const groupSchema: JsonSchema = {
+				type: 'object',
+				title: schema.title || baseKey,
+				properties: {},
+			};
+			this.addGroup(groupSchema, parent, key);
+			const targetGroup = (parent as FieldGroup).fields[key] as FieldGroup;
+
+			// Create radio field for oneOf selection
+			// This control is NOT added to the FormGroup, so it won't appear in form value
+			const options = schema.oneOf!.map((oneOfSchema, i) => {
+				const titleFromProps = oneOfSchema.properties
+					? Object.values(oneOfSchema.properties)[0]?.title
+					: undefined;
+
+				return {
+					label: oneOfSchema.title || titleFromProps || `Option ${i + 1}`,
+					value: i,
+				};
+			});
+
+			// Create a control for the radio (not added to FormGroup)
+			const conditionalControl = new FormControl(null);
+
+			const radioKey = `${baseKey}_oneOf_selector`;
+			const radioField: FieldConfig = {
+				label: '',
+				controlRef: conditionalControl,
+				key: radioKey,
+				type: FieldType.Radio,
+				options,
+				parent: targetGroup,
+				conditionalSchemas: schema.oneOf!.map((oneOfSchema, i) => ({
+					triggerValue: i,
+					schema: oneOfSchema,
+					addedKeys: [],
+				})),
+			};
+
+			// Add the field to the target group (but not to the FormGroup)
+			targetGroup.fields[radioKey] = radioField;
+
+			// Set up valueChanges subscription for conditional logic
+			const subscription = conditionalControl.valueChanges.subscribe(value => {
+				this.handleConditionalSchemas(radioField, value, targetGroup);
+			});
+			this.subscriptions.set(`${key}.${radioKey}`, subscription);
+		} else {
+			// Legacy behavior: add radio directly to parent (no key provided)
+			console.log('NO PARENT KEY oneOf handling', schema);
+
+			const options = schema.oneOf!.map((oneOfSchema, i) => {
+				const titleFromProps = oneOfSchema.properties
+					? Object.values(oneOfSchema.properties)[0]?.title
+					: undefined;
+
+				return {
+					label: oneOfSchema.title || titleFromProps || `Option ${i + 1}`,
+					value: i,
+				};
+			});
+
+			const radioSchema: JsonSchema = {
+				type: 'string',
+				title: schema.title || baseKey,
+				enum: options.map(opt => opt.value),
+			};
+
+			this.addField(radioSchema, parent, baseKey);
+
+			const radioField = (parent as FieldGroup).fields[baseKey] as FieldConfig;
+			if (radioField && radioField.conditionalSchemas) {
+				radioField.type = FieldType.Radio;
+				radioField.options = options;
+
+				for (let i = 0; i < schema.oneOf!.length; i++) {
+					radioField.conditionalSchemas.push({
+						triggerValue: i,
+						schema: schema.oneOf![i],
+						addedKeys: [],
+					});
+				}
+			}
+		}
 	}
 
 	/**
 	 * It creates a new FormGroup for the groupRef property in FieldGroup, and assigns
-	 * properties of the FieldGroup based on the schema:
-	 *
-	 * - label from title
-	 * - key from property name that holds schema (under "properties")
-	 * - type will always be "group"
-	 * - fields will hold properties, and be added with this.addField
-	 * - parent reference to parent FieldGroup or FieldArray
+	 * properties of the FieldGroup based on the schema
 	 */
 	addGroup(schema: JsonSchema, parent: FieldGroup | FieldArray, key: string): void {
 		// Create a new FormGroup
@@ -222,10 +408,8 @@ export class SchemaService {
 			parentArray.arrayRef?.push(formGroup);
 		}
 
-		// Process properties recursively
-		if (schema.properties) {
-			this.processSchemaProperties(schema, fieldGroup);
-		}
+		// Process the schema recursively (handles properties, allOf, anyOf, oneOf, if/then/else)
+		this.processSchema(schema, fieldGroup);
 	}
 
 	/**
@@ -264,22 +448,7 @@ export class SchemaService {
 	}
 
 	/**
-	 * New-up a FormControl, setting validation requirements based on schema. Creates the
-	 * FieldConfig and adds it to the parent, assigns the form control to the controlRef property,
-	 * and add the control to the parent form group or form array via the groupRef or arrayRef
-	 * properties of the parent. It assigns FieldConfig properties based on the schema:
-	 *
-	 * - label from title
-	 * - key from property name that holds schema
-	 * - type from type, but where there is an enum:
-	 *     • 'select' field type should be used for enums with 5 or more items
-	 *     • 'radio' field type should be used for 4 items or less
-	 * - description from description
-	 * - options from enum values
-	 * - validations come from schema and parent, if any
-	 * - parent reference to parent FieldGroup or FieldArray
-	 * - sets up a valueChanges subscription to call handleConditionalSchemas for any
-	 *   conditionalSchemas stored in this field
+	 * New-up a FormControl, and assigns FieldConfig properties based on the schema
 	 */
 	addField(schema: JsonSchema, parent: FieldGroup | FieldArray, key: string): void {
 		// Build validators using helper method
@@ -325,7 +494,7 @@ export class SchemaService {
 
 		// Set up valueChanges subscription for conditional schemas
 		const subscription = control.valueChanges.subscribe(value => {
-			console.log('field changed', fieldConfig, value);
+			// console.log('field changed', fieldConfig, value);
 			if (fieldConfig.conditionalSchemas && fieldConfig.conditionalSchemas.length > 0) {
 				this.handleConditionalSchemas(fieldConfig, value, parent);
 			}
@@ -367,17 +536,7 @@ export class SchemaService {
 	}
 
 	/**
-	 * New-up a FormArray, setting validation requirements based on schema. Creates the
-	 * FieldArray and adds it to the parent, assigns the form array to the arrayRef property,
-	 * and add the form array to the parent form group or form array via the groupRef or arrayRef
-	 * properties of the parent. It assigns FieldArray properties based on the schema:
-	 *
-	 * - label from title
-	 * - key from property name that holds schema
-	 * - type will always be "array"
-	 * - description from description
-	 * - validations come from schema and parent, if any
-	 * - reference to parent FieldGroup or FieldArray
+	 * New-up a FormArray, and assigns FieldArray properties based on the schema
 	 */
 	addArray(schema: JsonSchema, parent: FieldGroup | FieldArray, key: string): void {
 		// Create a new FormArray
@@ -424,6 +583,12 @@ export class SchemaService {
 			const parentArray = parent as FieldArray;
 			parentArray.items.push(fieldArray);
 			parentArray.arrayRef?.push(formArray);
+		}
+
+		// Process the schema for any conditional logic (anyOf, oneOf, if/then/else)
+		// Note: This is rare for arrays but supported by JSON Schema
+		if (schema.anyOf || schema.oneOf || schema.if || schema.allOf) {
+			this.processSchema(schema, fieldArray);
 		}
 
 		// Add minimum required items if specified
@@ -588,7 +753,7 @@ export class SchemaService {
 				shouldAdd &&
 				(!conditionalSchema.addedKeys || conditionalSchema.addedKeys.length === 0)
 			) {
-				const addedKeys = this.processSchemaProperties(conditionalSchema.schema, parent);
+				const addedKeys = this.processProperties(conditionalSchema.schema, parent);
 				conditionalSchema.addedKeys = addedKeys;
 			}
 		}
@@ -649,33 +814,25 @@ export class SchemaService {
 
 	/**
 	 * Helper method to process a schema and add its properties/fields to a parent.
-	 * Used by handleConditionalSchemas to add conditional fields.
-	 * Traverses the schema's properties and calls addField, addGroup, or addArray as appropriate.
 	 * Returns an array of keys that were added (for tracking in ConditionalSchema.addedKeys)
 	 */
-	processSchemaProperties(schema: JsonSchema, parent: FieldGroup | FieldArray): string[] {
+	processProperties(schema: JsonSchema, parent: FieldGroup | FieldArray): string[] {
 		const addedKeys: string[] = [];
 
-		if (!schema.properties) {
-			return addedKeys;
-		}
+		// Track the keys before processing
+		const keysBefore =
+			parent.type === FieldType.Group ? Object.keys((parent as FieldGroup).fields) : [];
 
-		// Iterate through each property in the schema
-		for (const [key, propertySchema] of Object.entries(schema.properties)) {
-			const schemaType = Array.isArray(propertySchema.type)
-				? propertySchema.type[0]
-				: propertySchema.type;
+		// Process the schema, which will handle properties, anyOf, oneOf, if/then/else, etc.
+		this.processSchema(schema, parent);
 
-			// Determine what type of field to add based on schema type
-			if (schemaType === 'object') {
-				this.addGroup(propertySchema, parent, key);
-				addedKeys.push(key);
-			} else if (schemaType === 'array') {
-				this.addArray(propertySchema, parent, key);
-				addedKeys.push(key);
-			} else {
-				this.addField(propertySchema, parent, key);
-				addedKeys.push(key);
+		// Track the keys after processing to determine what was added
+		if (parent.type === FieldType.Group) {
+			const keysAfter = Object.keys((parent as FieldGroup).fields);
+			for (const key of keysAfter) {
+				if (!keysBefore.includes(key)) {
+					addedKeys.push(key);
+				}
 			}
 		}
 

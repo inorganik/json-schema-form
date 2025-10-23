@@ -21,4 +21,9 @@ export class EnablementComponent implements OnInit {
 			console.log('group config', this.groupConfig);
 		});
 	}
+
+	handleFormSubmit() {
+		console.log('valid', this.groupConfig.groupRef.valid);
+		console.log('form value', this.groupConfig.groupRef.value);
+	}
 }

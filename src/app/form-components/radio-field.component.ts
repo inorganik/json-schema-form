@@ -8,10 +8,12 @@ import { FieldConfig } from '../models/form-models';
 	imports: [CommonModule, ReactiveFormsModule],
 	template: `
 		<div class="form-field">
+			@if (config.label) {
 			<label class="field-label">
 				{{ config.label }}
 				<span *ngIf="config.validations?.required" class="required">*</span>
 			</label>
+			}
 			<div class="radio-group">
 				@for (option of config.options; track $index) {
 				<label class="radio-option">

@@ -10,6 +10,14 @@ export interface JsonSchema {
 	$ref?: string;
 	$comment?: string;
 
+	// Annotation keywords
+	title?: string;
+	description?: string;
+	default?: any;
+	readOnly?: boolean;
+	writeOnly?: boolean;
+	examples?: any[];
+
 	// Type keywords
 	type?: JsonSchemaType | JsonSchemaType[];
 	enum?: any[];
@@ -57,20 +65,13 @@ export interface JsonSchema {
 	oneOf?: JsonSchema[];
 	not?: JsonSchema;
 
-	// Annotation keywords
-	title?: string;
-	description?: string;
-	default?: any;
-	readOnly?: boolean;
-	writeOnly?: boolean;
-	examples?: any[];
-
 	// Media keywords
 	contentMediaType?: string;
 	contentEncoding?: string;
 
 	// Schema composition
 	definitions?: { [key: string]: JsonSchema };
+	$defs?: { [key: string]: JsonSchema };
 }
 
 export type JsonSchemaType =

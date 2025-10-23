@@ -9,10 +9,6 @@
 					"title": "Title",
 					"type": "string"
 				},
-				"author": {
-					"title": "Author",
-					"type": "string"
-				},
 				"cost": {
 					"title": "Cost",
 					"type": "number",
@@ -41,8 +37,8 @@
 			"flags": {
 				"oneOf": [
 					{
+						"title": "Product flag",
 						"properties": {
-							"title": "Product flag",
 							"productFlag": {
 								"$ref": "#/$defs/productFlag"
 							}
@@ -50,8 +46,8 @@
 						"required": ["productFlag"]
 					},
 					{
+						"title": "LaunchDarkly feature flag",
 						"properties": {
-							"title": "LaunchDarkly feature flag",
 							"ldFeatureFlag": {
 								"$ref": "#/$defs/ldFeatureFlag"
 							}
@@ -59,6 +55,7 @@
 						"required": ["ldFeatureFlag"]
 					},
 					{
+						"title": "Logical OR",
 						"properties": {
 							"or": {
 								"$ref": "#/$defs/logicArray"
@@ -67,6 +64,7 @@
 						"required": ["or"]
 					},
 					{
+						"title": "Logical AND",
 						"properties": {
 							"and": {
 								"$ref": "#/$defs/logicArray"
@@ -85,6 +83,7 @@
 				"type": "object",
 				"anyOf": [
 					{
+						"title": "Product flag",
 						"properties": {
 							"productFlag": {
 								"$ref": "#/$defs/productFlag"
@@ -93,6 +92,7 @@
 						"required": ["productFlag"]
 					},
 					{
+						"title": "LaunchDarkly feature flag",
 						"properties": {
 							"ldFeatureFlag": {
 								"$ref": "#/$defs/ldFeatureFlag"
@@ -101,6 +101,7 @@
 						"required": ["ldFeatureFlag"]
 					},
 					{
+						"title": "Logical OR",
 						"properties": {
 							"or": {
 								"$ref": "#/$defs/logicArray"
@@ -109,6 +110,7 @@
 						"required": ["or"]
 					},
 					{
+						"title": "Logical AND",
 						"properties": {
 							"and": {
 								"$ref": "#/$defs/logicArray"
@@ -127,13 +129,15 @@
 			"type": "object",
 			"properties": {
 				"name": {
+					"title": "Feature Flag",
 					"type": "string"
 				},
 				"booleanEquals": {
+					"title": "On",
 					"type": "boolean"
 				}
 			},
-			"required": ["name", "booleanEquals"]
+			"required": ["name"]
 		}
 	}
 }
