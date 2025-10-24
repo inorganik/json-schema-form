@@ -10,16 +10,23 @@ import { FieldComponent } from './field.component';
 	template: `
 		<div class="field-group">
 			<fieldset>
-				<legend>{{ config.label }}</legend>
+				@if (config.label) {
+					<legend>{{ config.label }}</legend>
+				}
 				<div class="group-fields">
-					@for (field of fieldEntries; track field.key) { @switch (field.fieldConfig.type)
-					{ @case (FieldType.Group) {
-					<app-field-group [config]="asFieldGroup(field.fieldConfig)" />
-					} @case (FieldType.Array) {
-					<app-field-array [config]="asFieldArray(field.fieldConfig)" />
-					} @default {
-					<app-field [config]="asField(field.fieldConfig)" />
-					} }}
+					@for (field of fieldEntries; track field.key) {
+						@switch (field.fieldConfig.type) {
+							@case (FieldType.Group) {
+								<app-field-group [config]="asFieldGroup(field.fieldConfig)" />
+							}
+							@case (FieldType.Array) {
+								<app-field-array [config]="asFieldArray(field.fieldConfig)" />
+							}
+							@default {
+								<app-field [config]="asField(field.fieldConfig)" />
+							}
+						}
+					}
 				</div>
 			</fieldset>
 		</div>
@@ -29,15 +36,7 @@ import { FieldComponent } from './field.component';
 			.field-group {
 				margin-bottom: 1rem;
 			}
-			fieldset {
-				border: 1px solid #ccc;
-				border-radius: 4px;
-				padding: 1rem;
-			}
-			legend {
-				font-weight: 600;
-				padding: 0 0.5rem;
-			}
+
 			.group-fields {
 				display: flex;
 				flex-direction: column;
@@ -72,6 +71,6 @@ export class FieldGroupComponent {
 	}
 
 	ngOnInit() {
-		// console.log('field-group', this.config);
+		console.log('field-group', this.config);
 	}
 }

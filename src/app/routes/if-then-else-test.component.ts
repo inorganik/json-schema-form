@@ -5,14 +5,14 @@ import { FieldGroup } from '../models/form-models';
 import { SchemaService } from '../services/schema.service';
 
 @Component({
-	selector: 'app-if-then-else',
+	selector: 'app-if-then-else-test',
 	imports: [FieldGroupComponent],
 	template: `
 		<app-field-group [config]="groupConfig" />
 		<button type="button" (click)="handleFormSubmit()">Submit</button>
 	`,
 })
-export class IfThenElseComponent implements OnInit {
+export class IfThenElseTestComponent implements OnInit {
 	groupConfig: FieldGroup;
 	private http = inject(HttpClient);
 	private schemaService = inject(SchemaService);

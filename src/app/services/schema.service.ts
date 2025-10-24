@@ -40,7 +40,7 @@ export class SchemaService {
 		}
 
 		// Process the schema (handles allOf, properties, anyOf, oneOf, if/then/else)
-		this.processSchema(schema, rootGroup);
+		this.processSchema(schema, rootGroup, 'root');
 
 		return rootGroup;
 	}
@@ -85,6 +85,7 @@ export class SchemaService {
 	 * - oneOf: creates a radio field with options and conditional schemas
 	 * - if/then/else: adds conditional schemas to the referenced field
 	 * - properties: processes each property (which may also have conditionals)
+	 * - items: processes array items at the top level when type is "array"
 	 *
 	 * @param schema The JSON schema to process
 	 * @param parent The parent FieldGroup or FieldArray to add fields to
@@ -121,6 +122,16 @@ export class SchemaService {
 			this.handleOneOf(schema, parent, key);
 		}
 
+		// Handle top-level array type with items
+		if (schema.type === 'array' && schema.items && !schema.properties) {
+			// This is a top-level array schema, process it as an array field
+			if (key) {
+				this.addArray(schema, parent, key);
+			}
+			// If no key is provided, we can't add it (top-level arrays need a key)
+			return;
+		}
+
 		// Process regular properties FIRST (before if/then/else)
 		if (schema.properties) {
 			for (const [propKey, propertySchema] of Object.entries(schema.properties)) {
@@ -139,14 +150,9 @@ export class SchemaService {
 					continue;
 				}
 
-				// Regular property - process normally based on type
-				const schemaType = Array.isArray(actualSchema.type)
-					? actualSchema.type[0]
-					: actualSchema.type;
-
-				if (schemaType === 'object') {
+				if (actualSchema.type === 'object') {
 					this.addGroup(actualSchema, parent, propKey);
-				} else if (schemaType === 'array') {
+				} else if (actualSchema.type === 'array') {
 					this.addArray(actualSchema, parent, propKey);
 				} else {
 					this.addField(actualSchema, parent, propKey);
@@ -465,8 +471,7 @@ export class SchemaService {
 			fieldType = schema.enum.length >= 5 ? FieldType.Select : FieldType.Radio;
 		} else {
 			// Map schema type to field type
-			const schemaType = Array.isArray(schema.type) ? schema.type[0] : schema.type;
-			switch (schemaType) {
+			switch (schema.type) {
 				case 'boolean':
 					fieldType = FieldType.Checkbox;
 					break;
@@ -594,7 +599,7 @@ export class SchemaService {
 		// Add minimum required items if specified
 		if (itemSchema && schema.minItems) {
 			for (let i = 0; i < schema.minItems; i++) {
-				this.addArrayItem(fieldArray, itemSchema);
+				this.addArrayItem(fieldArray);
 			}
 		}
 	}
@@ -638,12 +643,8 @@ export class SchemaService {
 	 * Adds a new item to a FieldArray based on the itemSchema.
 	 * Determines the type of item to add (field, group, or array) and creates it.
 	 */
-	addArrayItem(fieldArray: FieldArray, itemSchema?: JsonSchema): void {
-		if (!itemSchema) {
-			itemSchema = fieldArray.itemSchema;
-		}
-
-		if (!itemSchema) {
+	addArrayItem(fieldArray: FieldArray): void {
+		if (!fieldArray.itemSchema) {
 			console.warn('No item schema available for array:', fieldArray.key);
 			return;
 		}
@@ -652,14 +653,12 @@ export class SchemaService {
 		const itemKey = `${fieldArray.key}_item_${fieldArray.items.length}`;
 
 		// Determine what type of item to add based on schema type
-		const schemaType = Array.isArray(itemSchema.type) ? itemSchema.type[0] : itemSchema.type;
-
-		if (schemaType === 'object') {
-			this.addGroup(itemSchema, fieldArray, itemKey);
-		} else if (schemaType === 'array') {
-			this.addArray(itemSchema, fieldArray, itemKey);
+		if (fieldArray.itemSchema.type === 'object') {
+			this.addGroup(fieldArray.itemSchema, fieldArray, itemKey);
+		} else if (fieldArray.itemSchema.type === 'array') {
+			this.addArray(fieldArray.itemSchema, fieldArray, itemKey);
 		} else {
-			this.addField(itemSchema, fieldArray, itemKey);
+			this.addField(fieldArray.itemSchema, fieldArray, itemKey);
 		}
 	}
 
@@ -710,7 +709,7 @@ export class SchemaService {
 	handleConditionalSchemas(
 		field: FieldConfig,
 		currentValue: any,
-		parent: FieldGroup | FieldArray
+		parent: FieldGroup | FieldArray,
 	): void {
 		if (!field.conditionalSchemas || field.conditionalSchemas.length === 0) {
 			return;
@@ -753,6 +752,8 @@ export class SchemaService {
 				shouldAdd &&
 				(!conditionalSchema.addedKeys || conditionalSchema.addedKeys.length === 0)
 			) {
+				console.log('process properties');
+
 				const addedKeys = this.processProperties(conditionalSchema.schema, parent);
 				conditionalSchema.addedKeys = addedKeys;
 			}
@@ -765,7 +766,7 @@ export class SchemaService {
 	 */
 	private buildValidators(
 		schema: JsonSchema,
-		parent: FieldGroup | FieldArray
+		parent: FieldGroup | FieldArray,
 	): { validators: any[]; validations: any } {
 		const validators = [];
 		const validations: any = {};

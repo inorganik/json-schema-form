@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
-import { ArrayComponent } from './routes/array.component';
-import { IfThenElseComponent } from './routes/if-then-else.component';
+import { ArrayTestComponent } from './routes/array-test.component';
+import { IfThenElseTestComponent } from './routes/if-then-else-test.component';
 
 export const routes: Routes = [
 	{
@@ -10,10 +10,10 @@ export const routes: Routes = [
 	},
 	{
 		path: 'if-then-else',
-		component: IfThenElseComponent,
+		component: IfThenElseTestComponent,
 	},
 	{
 		path: 'array',
-		component: ArrayComponent,
+		component: ArrayTestComponent,
 	},
 ];

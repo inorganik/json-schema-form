@@ -15,7 +15,7 @@ import { FieldConfig } from '../models/form-models';
 			<select [formControl]="config.controlRef" class="select-input">
 				<option [value]="null">Select an option</option>
 				@for (option of config.options; track $index) {
-				<option [value]="option.value">{{ option.label }}</option>
+					<option [value]="option.value">{{ option.label }}</option>
 				}
 			</select>
 			<small *ngIf="config.description" class="description">

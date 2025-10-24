@@ -76,27 +76,6 @@
 			},
 			"uniqueItems": true
 		},
-		"tupleArray": {
-			"type": "array",
-			"title": "Coordinate Tuple",
-			"description": "Fixed-length array with specific types",
-			"items": [
-				{
-					"type": "number",
-					"title": "X Coordinate"
-				},
-				{
-					"type": "number",
-					"title": "Y Coordinate"
-				},
-				{
-					"type": "string",
-					"title": "Label"
-				}
-			],
-			"minItems": 3,
-			"maxItems": 3
-		},
 		"arrayWithDefault": {
 			"type": "array",
 			"title": "Array with Default Values",

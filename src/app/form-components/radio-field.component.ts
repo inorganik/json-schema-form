@@ -9,22 +9,22 @@ import { FieldConfig } from '../models/form-models';
 	template: `
 		<div class="form-field">
 			@if (config.label) {
-			<label class="field-label">
-				{{ config.label }}
-				<span *ngIf="config.validations?.required" class="required">*</span>
-			</label>
+				<label class="field-label">
+					{{ config.label }}
+					<span *ngIf="config.validations?.required" class="required">*</span>
+				</label>
 			}
 			<div class="radio-group">
 				@for (option of config.options; track $index) {
-				<label class="radio-option">
-					<input
-						type="radio"
-						[name]="config.key.toString()"
-						[value]="option.value"
-						[formControl]="config.controlRef"
-					/>
-					<span class="radio-label">{{ option.label }}</span>
-				</label>
+					<label class="radio-option">
+						<input
+							type="radio"
+							[name]="config.key.toString()"
+							[value]="option.value"
+							[formControl]="config.controlRef"
+						/>
+						<span class="radio-label">{{ option.label }}</span>
+					</label>
 				}
 			</div>
 			<small *ngIf="config.description" class="description">

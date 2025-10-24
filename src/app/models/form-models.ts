@@ -70,7 +70,7 @@ export interface FieldArray {
 	key: string;
 	type: FieldType;
 	description?: string;
-	items: Array<FieldConfig | FieldGroup | FieldArray>;
+	items: Array<FieldConfig | FieldGroup | FieldArray>; // holds added item configs
 	itemSchema?: JsonSchema; // Schema template for array items
 	validations?: FieldArrayValidations;
 	canAddItem: () => boolean;

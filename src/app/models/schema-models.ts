@@ -19,7 +19,7 @@ export interface JsonSchema {
 	examples?: any[];
 
 	// Type keywords
-	type?: JsonSchemaType | JsonSchemaType[];
+	type?: JsonSchemaType;
 	enum?: any[];
 	const?: any;
 

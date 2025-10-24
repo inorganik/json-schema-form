@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input } from '@angular/core';
+import { Component, inject, Input } from '@angular/core';
 import { FieldArray, FieldConfig, FieldGroup, FieldType } from '../models/form-models';
+import { SchemaService } from '../services/schema.service';
 import { FieldGroupComponent } from './field-group.component';
 import { FieldComponent } from './field.component';
 
@@ -8,22 +9,30 @@ import { FieldComponent } from './field.component';
 	selector: 'app-field-array',
 	imports: [CommonModule, FieldComponent, FieldGroupComponent],
 	template: `
-		<div class="app-field-array">
-			array group
-			<label>{{ config.label }}</label>
-			<div class="array-item">
-				@for (item of config.items; track $index) { @switch (item.type) { @case
-				(FieldType.Group) {
-				<app-field-group [config]="asFieldGroup(item)" />
-				} @case (FieldType.Array) {
-				<app-field-array [config]="asFieldArray(item)" />
-				} @default {
-				<app-field [config]="asField(item)" />
-				} }
-				<button type="button" (click)="remove($index)" class="remove-btn">Remove</button>
-				}
-			</div>
-			<button type="button" (click)="add()" class="add-btn">Add</button>
+		<div class="field-array">
+			<fieldset>
+				<legend>{{ config.label }}</legend>
+				<div class="array-item">
+					{{ config.items.length }} items
+					@for (item of config.items; track $index) {
+						@switch (item.type) {
+							@case (FieldType.Group) {
+								<app-field-group [config]="asFieldGroup(item)" />
+							}
+							@case (FieldType.Array) {
+								<app-field-array [config]="asFieldArray(item)" />
+							}
+							@default {
+								<app-field [config]="asField(item)" />
+							}
+						}
+						<button type="button" (click)="remove($index)" class="remove-btn">
+							Remove
+						</button>
+					}
+				</div>
+				<button type="button" (click)="add()" class="add-btn">Add</button>
+			</fieldset>
 		</div>
 	`,
 	styles: [
@@ -60,6 +69,8 @@ export class FieldArrayComponent {
 	// Expose FieldType enum to template
 	FieldType = FieldType;
 
+	schemaService = inject(SchemaService);
+
 	ngOnInit() {
 		// console.log('array', this.config);
 	}
@@ -77,10 +88,10 @@ export class FieldArrayComponent {
 	}
 
 	add(): void {
-		// todo
+		this.schemaService.addArrayItem(this.config);
 	}
 
 	remove(index: number): void {
-		// todo
+		this.schemaService.removeArrayItem(this.config, index);
 	}
 }
