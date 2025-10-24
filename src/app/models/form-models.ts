@@ -22,6 +22,11 @@ export interface FieldValidations {
 	exclusiveMinimum?: number;
 }
 
+export interface FieldArrayValidations {
+	maxItems?: number;
+	minItems?: number;
+}
+
 /**
  * Holds metadata for conditionally rendered schemas based on field values
  */
@@ -40,6 +45,7 @@ export interface FieldConfig {
 	label: string;
 	controlRef: FormControl;
 	key: string;
+	uniqueKey: string;
 	type: FieldType;
 	description?: string;
 	options?: { label: string; value: any }[];
@@ -52,6 +58,7 @@ export interface FieldGroup {
 	label: string;
 	groupRef: FormGroup;
 	key: string;
+	uniqueKey: string;
 	type: FieldType;
 	fields: { [key: string]: FieldConfig | FieldGroup | FieldArray };
 	validations?: FieldValidations;
@@ -59,15 +66,11 @@ export interface FieldGroup {
 	conditionalSchemas?: ConditionalSchema[];
 }
 
-export interface FieldArrayValidations {
-	maxItems?: number;
-	minItems?: number;
-}
-
 export interface FieldArray {
 	label: string;
 	arrayRef: FormArray;
 	key: string;
+	uniqueKey: string;
 	type: FieldType;
 	description?: string;
 	items: Array<FieldConfig | FieldGroup | FieldArray>; // holds added item configs

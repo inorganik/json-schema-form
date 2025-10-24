@@ -28,6 +28,7 @@ export class SchemaService {
 			label: schema.title || 'Form',
 			groupRef: new FormGroup({}),
 			key: 'root',
+			uniqueKey: 'root',
 			type: FieldType.Group,
 			fields: {},
 			parent: null,
@@ -92,7 +93,7 @@ export class SchemaService {
 	 * @param key Optional key to use for oneOf/anyOf fields (when processing a property)
 	 */
 	private processSchema(schema: JsonSchema, parent: FieldGroup | FieldArray, key?: string): void {
-		console.log('process schema', schema, 'key:', key);
+		// console.log('process schema', schema, 'key:', key);
 
 		// Handle $ref - resolve and process the referenced schema
 		if (schema.$ref) {
@@ -205,77 +206,61 @@ export class SchemaService {
 	 * @param key Optional key to use for the anyOf fields (when processing a property)
 	 */
 	private handleAnyOf(schema: JsonSchema, parent: FieldGroup | FieldArray, key?: string): void {
+		if (parent.type !== FieldType.Group) {
+			console.warn('anyOf requires parent to be a FieldGroup', schema);
+			return;
+		}
+
 		const baseKey = key || 'anyOf';
 
-		// When we have a key (property name), create a group for it
-		if (key && parent.type === FieldType.Group) {
-			// Create a group for this property
+		// If we have a key, create a group for this property; otherwise use parent directly
+		let targetGroup: FieldGroup;
+		if (key) {
 			const groupSchema: JsonSchema = {
 				type: 'object',
 				title: schema.title || baseKey,
 				properties: {},
 			};
 			this.addGroup(groupSchema, parent, key);
-			const targetGroup = (parent as FieldGroup).fields[key] as FieldGroup;
-
-			// Create checkbox fields for each anyOf option
-			// These controls are NOT added to the FormGroup, so they won't appear in form value
-			for (let i = 0; i < schema.anyOf!.length; i++) {
-				const anyOfSchema = schema.anyOf![i];
-				const checkboxKey = `${baseKey}_anyOf_${i}`;
-
-				// Create a control for the checkbox (not added to FormGroup)
-				const conditionalControl = new FormControl(false);
-
-				const checkboxField: FieldConfig = {
-					label: anyOfSchema.title || `${baseKey} option ${i + 1}`,
-					controlRef: conditionalControl,
-					key: checkboxKey,
-					type: FieldType.Checkbox,
-					parent: targetGroup,
-					conditionalSchemas: [
-						{
-							triggerValue: true,
-							removeTriggerValue: false,
-							schema: anyOfSchema,
-							addedKeys: [],
-						},
-					],
-				};
-
-				// Add the field to the target group (but not to the FormGroup)
-				targetGroup.fields[checkboxKey] = checkboxField;
-
-				// Set up valueChanges subscription for conditional logic
-				const subscription = conditionalControl.valueChanges.subscribe(value => {
-					this.handleConditionalSchemas(checkboxField, value, targetGroup);
-				});
-				this.subscriptions.set(`${key}.${checkboxKey}`, subscription);
-			}
+			targetGroup = (parent as FieldGroup).fields[key] as FieldGroup;
 		} else {
-			// Legacy behavior: add checkboxes directly to parent (no key provided)
-			console.log('NO PARENT KEY anyOf handling', schema);
-			for (let i = 0; i < schema.anyOf!.length; i++) {
-				const anyOfSchema = schema.anyOf![i];
-				const checkboxKey = `${baseKey}_anyOf_${i}`;
+			targetGroup = parent as FieldGroup;
+		}
 
-				const checkboxSchema: JsonSchema = {
-					type: 'boolean',
-					title: anyOfSchema.title || `${baseKey} option ${i + 1}`,
-				};
+		// Create checkbox fields for each anyOf option
+		// These controls are NOT added to the FormGroup, so they won't appear in form value
+		for (let i = 0; i < schema.anyOf!.length; i++) {
+			const anyOfSchema = schema.anyOf![i];
+			const checkboxKey = `${baseKey}_anyOf_${i}`;
 
-				this.addField(checkboxSchema, parent, checkboxKey);
+			// Create a control for the checkbox (not added to FormGroup)
+			const conditionalControl = new FormControl(false);
 
-				const checkboxField = (parent as FieldGroup).fields[checkboxKey] as FieldConfig;
-				if (checkboxField && checkboxField.conditionalSchemas) {
-					checkboxField.conditionalSchemas.push({
+			const checkboxField: FieldConfig = {
+				label: anyOfSchema.title || `${baseKey} option ${i + 1}`,
+				controlRef: conditionalControl,
+				key: checkboxKey,
+				uniqueKey: `${targetGroup.uniqueKey}_${checkboxKey}`,
+				type: FieldType.Checkbox,
+				parent: targetGroup,
+				conditionalSchemas: [
+					{
 						triggerValue: true,
 						removeTriggerValue: false,
 						schema: anyOfSchema,
 						addedKeys: [],
-					});
-				}
-			}
+					},
+				],
+			};
+
+			// Add the field to the target group (but not to the FormGroup)
+			targetGroup.fields[checkboxKey] = checkboxField;
+
+			// Set up valueChanges subscription for conditional logic
+			const subscription = conditionalControl.valueChanges.subscribe(value => {
+				this.handleConditionalSchemas(checkboxField, value, targetGroup);
+			});
+			this.subscriptions.set(checkboxField.uniqueKey, subscription);
 		}
 	}
 
@@ -288,95 +273,67 @@ export class SchemaService {
 	 * @param key Optional key to use for the oneOf field (when processing a property)
 	 */
 	private handleOneOf(schema: JsonSchema, parent: FieldGroup | FieldArray, key?: string): void {
+		if (parent.type !== FieldType.Group) {
+			console.warn('oneOf requires parent to be a FieldGroup', schema);
+			return;
+		}
+
 		const baseKey = key || 'oneOf';
 
-		// When we have a key (property name), create a group for it
-		if (key && parent.type === FieldType.Group) {
-			// Create a group for this property
+		// If we have a key, create a group for this property; otherwise use parent directly
+		let targetGroup: FieldGroup;
+		if (key) {
 			const groupSchema: JsonSchema = {
 				type: 'object',
 				title: schema.title || baseKey,
 				properties: {},
 			};
 			this.addGroup(groupSchema, parent, key);
-			const targetGroup = (parent as FieldGroup).fields[key] as FieldGroup;
-
-			// Create radio field for oneOf selection
-			// This control is NOT added to the FormGroup, so it won't appear in form value
-			const options = schema.oneOf!.map((oneOfSchema, i) => {
-				const titleFromProps = oneOfSchema.properties
-					? Object.values(oneOfSchema.properties)[0]?.title
-					: undefined;
-
-				return {
-					label: oneOfSchema.title || titleFromProps || `Option ${i + 1}`,
-					value: i,
-				};
-			});
-
-			// Create a control for the radio (not added to FormGroup)
-			const conditionalControl = new FormControl(null);
-
-			const radioKey = `${baseKey}_oneOf_selector`;
-			const radioField: FieldConfig = {
-				label: '',
-				controlRef: conditionalControl,
-				key: radioKey,
-				type: FieldType.Radio,
-				options,
-				parent: targetGroup,
-				conditionalSchemas: schema.oneOf!.map((oneOfSchema, i) => ({
-					triggerValue: i,
-					schema: oneOfSchema,
-					addedKeys: [],
-				})),
-			};
-
-			// Add the field to the target group (but not to the FormGroup)
-			targetGroup.fields[radioKey] = radioField;
-
-			// Set up valueChanges subscription for conditional logic
-			const subscription = conditionalControl.valueChanges.subscribe(value => {
-				this.handleConditionalSchemas(radioField, value, targetGroup);
-			});
-			this.subscriptions.set(`${key}.${radioKey}`, subscription);
+			targetGroup = (parent as FieldGroup).fields[key] as FieldGroup;
 		} else {
-			// Legacy behavior: add radio directly to parent (no key provided)
-			console.log('NO PARENT KEY oneOf handling', schema);
-
-			const options = schema.oneOf!.map((oneOfSchema, i) => {
-				const titleFromProps = oneOfSchema.properties
-					? Object.values(oneOfSchema.properties)[0]?.title
-					: undefined;
-
-				return {
-					label: oneOfSchema.title || titleFromProps || `Option ${i + 1}`,
-					value: i,
-				};
-			});
-
-			const radioSchema: JsonSchema = {
-				type: 'string',
-				title: schema.title || baseKey,
-				enum: options.map(opt => opt.value),
-			};
-
-			this.addField(radioSchema, parent, baseKey);
-
-			const radioField = (parent as FieldGroup).fields[baseKey] as FieldConfig;
-			if (radioField && radioField.conditionalSchemas) {
-				radioField.type = FieldType.Radio;
-				radioField.options = options;
-
-				for (let i = 0; i < schema.oneOf!.length; i++) {
-					radioField.conditionalSchemas.push({
-						triggerValue: i,
-						schema: schema.oneOf![i],
-						addedKeys: [],
-					});
-				}
-			}
+			targetGroup = parent as FieldGroup;
 		}
+
+		// Create radio field for oneOf selection
+		// This control is NOT added to the FormGroup, so it won't appear in form value
+		const options = schema.oneOf!.map((oneOfSchema, i) => {
+			const titleFromProps = oneOfSchema.properties
+				? Object.values(oneOfSchema.properties)[0]?.title
+				: undefined;
+
+			return {
+				label: oneOfSchema.title || titleFromProps || `Option ${i + 1}`,
+				value: i,
+			};
+		});
+
+		// Create a control for the radio (not added to FormGroup)
+		const conditionalControl = new FormControl(null);
+
+		const radioKey = `${baseKey}_oneOf_selector`;
+		const radioField: FieldConfig = {
+			label: schema.title || baseKey,
+			controlRef: conditionalControl,
+			key: radioKey,
+			uniqueKey: `${targetGroup.uniqueKey}_${radioKey}`,
+			type: FieldType.Radio,
+			options,
+			parent: targetGroup,
+			conditionalSchemas: schema.oneOf!.map((oneOfSchema, i) => ({
+				triggerValue: i,
+				schema: oneOfSchema,
+				addedKeys: [],
+			})),
+		};
+
+		// Add the field to the target group (but not to the FormGroup)
+		targetGroup.fields[radioKey] = radioField;
+
+		// Set up valueChanges subscription for conditional logic
+		const subscription = conditionalControl.valueChanges.subscribe(value => {
+			this.handleConditionalSchemas(radioField, value, targetGroup);
+		});
+		this.subscriptions.set(radioField.uniqueKey, subscription);
 	}
 
 	/**
@@ -392,6 +349,7 @@ export class SchemaService {
 			label: schema.title || key,
 			groupRef: formGroup,
 			key,
+			uniqueKey: `${parent.uniqueKey}_${key}`,
 			type: FieldType.Group,
 			fields: {},
 			parent,
@@ -489,6 +447,7 @@ export class SchemaService {
 			label: schema.title || key,
 			controlRef: control,
 			key,
+			uniqueKey: `${parent.uniqueKey}_${key}`,
 			type: fieldType,
 			description: schema.description,
 			options: schema.enum ? this.convertEnumToOptions(schema.enum) : undefined,
@@ -506,7 +465,7 @@ export class SchemaService {
 		});
 
 		// Store subscription for cleanup later
-		this.subscriptions.set(key, subscription);
+		this.subscriptions.set(fieldConfig.uniqueKey, subscription);
 
 		// Add to parent
 		if (parent.type === FieldType.Group) {
@@ -526,11 +485,15 @@ export class SchemaService {
 	 */
 	removeField(key: string, parent: FieldGroup): void {
 		if (parent.type === FieldType.Group) {
+			const field = parent.fields[key] as FieldConfig;
+
 			// Unsubscribe from valueChanges if subscription exists
-			const subscription = this.subscriptions.get(key);
-			if (subscription) {
-				subscription.unsubscribe();
-				this.subscriptions.delete(key);
+			if (field) {
+				const subscription = this.subscriptions.get(field.uniqueKey);
+				if (subscription) {
+					subscription.unsubscribe();
+					this.subscriptions.delete(field.uniqueKey);
+				}
 			}
 
 			// Remove from FormGroup
@@ -564,6 +527,7 @@ export class SchemaService {
 			label: schema.title || key,
 			arrayRef: formArray,
 			key,
+			uniqueKey: `${parent.uniqueKey}_${key}`,
 			type: FieldType.Array,
 			description: schema.description,
 			items: [],
@@ -648,6 +612,7 @@ export class SchemaService {
 			console.warn('No item schema available for array:', fieldArray.key);
 			return;
 		}
+		// console.log('item schema', fieldArray.itemSchema);
 
 		// Generate a unique key for this array item
 		const itemKey = `${fieldArray.key}_item_${fieldArray.items.length}`;
@@ -679,10 +644,10 @@ export class SchemaService {
 			this.cleanupArraySubscriptions(item as FieldArray);
 		} else {
 			const fieldConfig = item as FieldConfig;
-			const subscription = this.subscriptions.get(fieldConfig.key);
+			const subscription = this.subscriptions.get(fieldConfig.uniqueKey);
 			if (subscription) {
 				subscription.unsubscribe();
-				this.subscriptions.delete(fieldConfig.key);
+				this.subscriptions.delete(fieldConfig.uniqueKey);
 			}
 		}
 
@@ -752,8 +717,6 @@ export class SchemaService {
 				shouldAdd &&
 				(!conditionalSchema.addedKeys || conditionalSchema.addedKeys.length === 0)
 			) {
-				console.log('process properties');
-
 				const addedKeys = this.processProperties(conditionalSchema.schema, parent);
 				conditionalSchema.addedKeys = addedKeys;
 			}
@@ -853,10 +816,11 @@ export class SchemaService {
 				this.cleanupArraySubscriptions(field as FieldArray);
 			} else {
 				// Clean up field subscription
-				const subscription = this.subscriptions.get(key);
+				const fieldConfig = field as FieldConfig;
+				const subscription = this.subscriptions.get(fieldConfig.uniqueKey);
 				if (subscription) {
 					subscription.unsubscribe();
-					this.subscriptions.delete(key);
+					this.subscriptions.delete(fieldConfig.uniqueKey);
 				}
 			}
 		}
@@ -876,10 +840,10 @@ export class SchemaService {
 			} else {
 				// Clean up field subscription
 				const fieldConfig = item as FieldConfig;
-				const subscription = this.subscriptions.get(fieldConfig.key);
+				const subscription = this.subscriptions.get(fieldConfig.uniqueKey);
 				if (subscription) {
 					subscription.unsubscribe();
-					this.subscriptions.delete(fieldConfig.key);
+					this.subscriptions.delete(fieldConfig.uniqueKey);
 				}
 			}
 		}
