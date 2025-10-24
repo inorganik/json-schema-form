@@ -1,14 +1,14 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, inject, OnInit } from '@angular/core';
-import { FieldGroupComponent } from '../form-components/field-group.component';
+import { FieldContainerComponent } from '../form-components/field-container.component';
 import { FieldGroup } from '../models/form-models';
 import { SchemaService } from '../services/schema.service';
 
 @Component({
 	selector: 'app-array-test',
-	imports: [FieldGroupComponent],
+	imports: [FieldContainerComponent],
 	template: `
-		<app-field-group [config]="groupConfig" />
+		<app-field-container [config]="groupConfig" />
 		<button type="button" (click)="handleFormSubmit()">Submit</button>
 	`,
 })
@@ -20,7 +20,7 @@ export class ArrayTestComponent implements OnInit {
 	ngOnInit() {
 		this.http.get('/array-schema.json').subscribe(schema => {
 			this.groupConfig = this.schemaService.schemaToFieldConfig(schema);
-			console.log('group config', this.groupConfig);
+			console.log('schema config', this.groupConfig);
 		});
 	}
 

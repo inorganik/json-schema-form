@@ -9,6 +9,7 @@
 			"title": "Simple String Array",
 			"description": "A basic array of strings",
 			"items": {
+				"title": "Foo",
 				"type": "string"
 			},
 			"minItems": 1,
@@ -19,6 +20,7 @@
 			"title": "Number Array",
 			"description": "Array of numbers with constraints",
 			"items": {
+				"title": "Percentage",
 				"type": "number",
 				"minimum": 0,
 				"maximum": 100
