@@ -1,0 +1,111 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "Array Schema Test",
+	"description": "Test schema with various array configurations",
+	"type": "object",
+	"properties": {
+		"simpleArray": {
+			"type": "array",
+			"title": "Simple String Array",
+			"description": "A basic array of strings",
+			"items": {
+				"type": "string"
+			},
+			"minItems": 1,
+			"maxItems": 5
+		},
+		"numberArray": {
+			"type": "array",
+			"title": "Number Array",
+			"description": "Array of numbers with constraints",
+			"items": {
+				"type": "number",
+				"minimum": 0,
+				"maximum": 100
+			},
+			"uniqueItems": true
+		},
+		"objectArray": {
+			"type": "array",
+			"title": "User List",
+			"description": "Array of user objects",
+			"items": {
+				"type": "object",
+				"properties": {
+					"name": {
+						"type": "string",
+						"title": "Name"
+					},
+					"email": {
+						"type": "string",
+						"format": "email",
+						"title": "Email"
+					},
+					"age": {
+						"type": "integer",
+						"title": "Age",
+						"minimum": 0
+					},
+					"active": {
+						"type": "boolean",
+						"title": "Active"
+					}
+				},
+				"required": ["name", "email"]
+			},
+			"minItems": 1
+		},
+		"nestedArray": {
+			"type": "array",
+			"title": "Matrix (2D Array)",
+			"description": "Array of arrays",
+			"items": {
+				"type": "array",
+				"items": {
+					"type": "number"
+				}
+			}
+		},
+		"enumArray": {
+			"type": "array",
+			"title": "Tag Selection",
+			"description": "Array with enum constraints",
+			"items": {
+				"type": "string",
+				"enum": ["javascript", "typescript", "angular", "react", "vue", "node"]
+			},
+			"uniqueItems": true
+		},
+		"tupleArray": {
+			"type": "array",
+			"title": "Coordinate Tuple",
+			"description": "Fixed-length array with specific types",
+			"items": [
+				{
+					"type": "number",
+					"title": "X Coordinate"
+				},
+				{
+					"type": "number",
+					"title": "Y Coordinate"
+				},
+				{
+					"type": "string",
+					"title": "Label"
+				}
+			],
+			"minItems": 3,
+			"maxItems": 3
+		},
+		"arrayWithDefault": {
+			"type": "array",
+			"title": "Array with Default Values",
+			"description": "Array that has default values",
+			"items": {
+				"type": "string"
+			},
+			"default": ["option1", "option2"]
+		}
+	},
+	"required": ["simpleArray", "objectArray"]
+}

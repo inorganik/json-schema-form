@@ -5,18 +5,20 @@ import { FieldGroup } from '../models/form-models';
 import { SchemaService } from '../services/schema.service';
 
 @Component({
-	selector: 'app-enablement',
+	selector: 'app-if-then-else',
 	imports: [FieldGroupComponent],
-	templateUrl: './enablement.component.html',
-	styleUrl: './enablement.component.scss',
+	template: `
+		<app-field-group [config]="groupConfig" />
+		<button type="button" (click)="handleFormSubmit()">Submit</button>
+	`,
 })
-export class EnablementComponent implements OnInit {
+export class IfThenElseComponent implements OnInit {
 	groupConfig: FieldGroup;
 	private http = inject(HttpClient);
 	private schemaService = inject(SchemaService);
 
 	ngOnInit() {
-		this.http.get('/enablement-schema.json').subscribe(schema => {
+		this.http.get('/if-then-else-schema.json').subscribe(schema => {
 			this.groupConfig = this.schemaService.schemaToFieldConfig(schema);
 			console.log('group config', this.groupConfig);
 		});

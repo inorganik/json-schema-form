@@ -1,14 +1,19 @@
 import { Routes } from '@angular/router';
-import { EnablementComponent } from './enablement/enablement.component';
+import { ArrayComponent } from './routes/array.component';
+import { IfThenElseComponent } from './routes/if-then-else.component';
 
 export const routes: Routes = [
 	{
 		path: '',
-		redirectTo: 'enablement',
+		redirectTo: 'if-then-else',
 		pathMatch: 'full',
 	},
 	{
-		path: 'enablement',
-		component: EnablementComponent,
+		path: 'if-then-else',
+		component: IfThenElseComponent,
+	},
+	{
+		path: 'array',
+		component: ArrayComponent,
 	},
 ];

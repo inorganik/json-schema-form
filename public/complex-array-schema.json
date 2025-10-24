@@ -1,0 +1,77 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "Array Schema Test",
+	"description": "Test schema with various array configurations",
+	"type": "object",
+	"properties": {
+		"complexArray": {
+			"type": "array",
+			"title": "Product Catalog",
+			"description": "Array with complex nested objects",
+			"items": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string",
+						"title": "Product ID"
+					},
+					"name": {
+						"type": "string",
+						"title": "Product Name"
+					},
+					"category": {
+						"type": "string",
+						"title": "Category",
+						"enum": ["electronics", "clothing", "food", "books"]
+					},
+					"price": {
+						"type": "number",
+						"title": "Price",
+						"minimum": 0
+					},
+					"tags": {
+						"type": "array",
+						"title": "Tags",
+						"items": {
+							"type": "string"
+						}
+					},
+					"inStock": {
+						"type": "boolean",
+						"title": "In Stock"
+					},
+					"specifications": {
+						"type": "object",
+						"title": "Specifications",
+						"properties": {
+							"weight": {
+								"type": "number",
+								"title": "Weight (lbs)"
+							},
+							"dimensions": {
+								"type": "object",
+								"title": "Dimensions",
+								"properties": {
+									"length": {
+										"type": "number",
+										"title": "Length (in)"
+									},
+									"width": {
+										"type": "number",
+										"title": "Width (in)"
+									},
+									"height": {
+										"type": "number",
+										"title": "Height (in)"
+									}
+								}
+							}
+						}
+					}
+				},
+				"required": ["id", "name", "price"]
+			}
+		}
+	},
+	"required": ["complexArray"]
+}

@@ -176,8 +176,8 @@
 
 <main class="main">
 	<div class="pill-group">
-		@for (item of [ { title: 'Enablement test', link: 'enablement' }]; track item.title) {
-		<a class="pill" routerLink="item.link">
+		@for (item of items; track item.title) {
+		<a class="pill" [routerLink]="item.link">
 			<span>{{ item.title }}</span>
 		</a>
 		}

@@ -8,5 +8,8 @@ import { RouterModule, RouterOutlet } from '@angular/router';
 	styleUrl: './app.component.scss',
 })
 export class AppComponent {
-	title = 'json-schema-form';
+	items = [
+		{ title: 'If/then test', link: 'if-then-else' },
+		{ title: 'Array test', link: 'array' },
+	];
 }
