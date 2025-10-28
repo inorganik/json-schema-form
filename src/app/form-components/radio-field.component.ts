@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 import { ReactiveFormsModule } from '@angular/forms';
-import { FieldConfig } from '../models/form-models';
+import { SchemaFieldConfig } from '../models/form-models';
 
 @Component({
 	selector: 'app-radio-field',
@@ -83,7 +83,7 @@ import { FieldConfig } from '../models/form-models';
 	],
 })
 export class RadioFieldComponent {
-	@Input() config: FieldConfig;
+	@Input() config: SchemaFieldConfig;
 
 	ngOnInit() {
 		// console.log('radio', this.config);

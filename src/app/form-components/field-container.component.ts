@@ -1,6 +1,11 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, Input } from '@angular/core';
-import { FieldArray, FieldConfig, FieldGroup, FieldType } from '../models/form-models';
+import {
+	SchemaFieldArray,
+	SchemaFieldConfig,
+	SchemaFieldGroup,
+	SchemaFieldType,
+} from '../models/form-models';
 import { SchemaService } from '../services/schema.service';
 import { FieldComponent } from './field.component';
 
@@ -121,10 +126,10 @@ import { FieldComponent } from './field.component';
 	],
 })
 export class FieldContainerComponent {
-	@Input() config!: FieldGroup | FieldArray;
+	@Input() config!: SchemaFieldGroup | SchemaFieldArray;
 
 	// Expose FieldType enum to template
-	FieldType = FieldType;
+	FieldType = SchemaFieldType;
 
 	schemaService = inject(SchemaService);
 
@@ -132,30 +137,32 @@ export class FieldContainerComponent {
 		// console.log('field-container', this.config);
 	}
 
-	isGroup(config: FieldGroup | FieldArray): config is FieldGroup {
-		return config?.type === FieldType.Group;
+	isGroup(config: SchemaFieldGroup | SchemaFieldArray): config is SchemaFieldGroup {
+		return config?.type === SchemaFieldType.Group;
 	}
 
-	isArray(config: FieldGroup | FieldArray): config is FieldArray {
-		return config?.type === FieldType.Array;
+	isArray(config: SchemaFieldGroup | SchemaFieldArray): config is SchemaFieldArray {
+		return config?.type === SchemaFieldType.Array;
 	}
-	asField(item: FieldConfig | FieldGroup | FieldArray): FieldConfig {
-		return item as FieldConfig;
-	}
-
-	asFieldGroup(item: FieldConfig | FieldGroup | FieldArray): FieldGroup {
-		return item as FieldGroup;
+	asField(item: SchemaFieldConfig | SchemaFieldGroup | SchemaFieldArray): SchemaFieldConfig {
+		return item as SchemaFieldConfig;
 	}
 
-	asFieldArray(item: FieldConfig | FieldGroup | FieldArray): FieldArray {
-		return item as FieldArray;
+	asFieldGroup(item: SchemaFieldConfig | SchemaFieldGroup | SchemaFieldArray): SchemaFieldGroup {
+		return item as SchemaFieldGroup;
 	}
 
-	asGroupOrArray(item: FieldConfig | FieldGroup | FieldArray): FieldGroup | FieldArray {
-		return item as FieldGroup | FieldArray;
+	asFieldArray(item: SchemaFieldConfig | SchemaFieldGroup | SchemaFieldArray): SchemaFieldArray {
+		return item as SchemaFieldArray;
 	}
 
-	getGroupEntries(config: FieldGroup | FieldArray) {
+	asGroupOrArray(
+		item: SchemaFieldConfig | SchemaFieldGroup | SchemaFieldArray,
+	): SchemaFieldGroup | SchemaFieldArray {
+		return item as SchemaFieldGroup | SchemaFieldArray;
+	}
+
+	getGroupEntries(config: SchemaFieldGroup | SchemaFieldArray) {
 		if (this.isGroup(config)) {
 			return Object.entries(config.fields).map(([key, value]) => ({
 				key,
@@ -165,7 +172,7 @@ export class FieldContainerComponent {
 		return [];
 	}
 
-	getArrayItems(config: FieldGroup | FieldArray) {
+	getArrayItems(config: SchemaFieldGroup | SchemaFieldArray) {
 		if (this.isArray(config)) {
 			return config.items;
 		}

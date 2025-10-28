@@ -1,7 +1,12 @@
 import { Injectable } from '@angular/core';
 import { FormArray, FormControl, FormGroup, Validators } from '@angular/forms';
 import { Subscription } from 'rxjs';
-import { FieldArray, FieldConfig, FieldGroup, FieldType } from '../models/form-models';
+import {
+	SchemaFieldArray,
+	SchemaFieldConfig,
+	SchemaFieldGroup,
+	SchemaFieldType,
+} from '../models/form-models';
 import { JsonSchema } from '../models/schema-models';
 
 @Injectable({
@@ -22,7 +27,7 @@ export class SchemaService {
 	 *
 	 * Returns the root FieldGroup representing the entire form
 	 */
-	schemaToFieldConfig(schema: JsonSchema): FieldGroup {
+	schemaToFieldConfig(schema: JsonSchema): SchemaFieldGroup {
 		// set defs
 		if (schema.$defs) {
 			for (const [key, definition] of Object.entries(schema.$defs)) {
@@ -33,12 +38,12 @@ export class SchemaService {
 		}
 
 		// Create the root field group
-		const rootGroup: FieldGroup = {
+		const rootGroup: SchemaFieldGroup = {
 			label: schema.title || 'Form',
 			groupRef: new FormGroup({}),
 			key: 'root',
 			uniqueKey: 'root',
-			type: FieldType.Group,
+			type: SchemaFieldType.Group,
 			fields: {},
 			parent: null,
 			conditionalSchemas: [],
@@ -90,7 +95,11 @@ export class SchemaService {
 	 * @param parent The parent FieldGroup or FieldArray to add fields to
 	 * @param key Optional key to use for oneOf/anyOf fields (when processing a property)
 	 */
-	private processSchema(schema: JsonSchema, parent: FieldGroup | FieldArray, key?: string): void {
+	private processSchema(
+		schema: JsonSchema,
+		parent: SchemaFieldGroup | SchemaFieldArray,
+		key?: string,
+	): void {
 		// Handle $ref - resolve and process the referenced schema
 		if (schema.$ref) {
 			const resolvedSchema = this.resolveRef(schema.$ref);
@@ -167,8 +176,8 @@ export class SchemaService {
 					// Look for the field in the parent group
 					// Walk up the tree if needed to find the root group where the field is defined
 					let targetGroup =
-						parent.type === FieldType.Group ? (parent as FieldGroup) : null;
-					let field: FieldConfig | FieldGroup | FieldArray | undefined;
+						parent.type === SchemaFieldType.Group ? (parent as SchemaFieldGroup) : null;
+					let field: SchemaFieldConfig | SchemaFieldGroup | SchemaFieldArray | undefined;
 
 					if (targetGroup) {
 						field = targetGroup.fields[ifKey];
@@ -177,9 +186,9 @@ export class SchemaService {
 						if (
 							!field &&
 							targetGroup.parent &&
-							targetGroup.parent.type === FieldType.Group
+							targetGroup.parent.type === SchemaFieldType.Group
 						) {
-							field = (targetGroup.parent as FieldGroup).fields[ifKey];
+							field = (targetGroup.parent as SchemaFieldGroup).fields[ifKey];
 						}
 					}
 
@@ -220,8 +229,12 @@ export class SchemaService {
 	 * @param parent The parent FieldGroup or FieldArray to add fields to
 	 * @param key Optional key to use for the anyOf fields (when processing a property)
 	 */
-	private handleAnyOf(schema: JsonSchema, parent: FieldGroup | FieldArray, key?: string): void {
-		if (parent.type !== FieldType.Group) {
+	private handleAnyOf(
+		schema: JsonSchema,
+		parent: SchemaFieldGroup | SchemaFieldArray,
+		key?: string,
+	): void {
+		if (parent.type !== SchemaFieldType.Group) {
 			console.warn('anyOf requires parent to be a FieldGroup', schema);
 			return;
 		}
@@ -229,7 +242,7 @@ export class SchemaService {
 		const baseKey = key || 'anyOf';
 
 		// If we have a key, create a group for this property; otherwise use parent directly
-		let targetGroup: FieldGroup;
+		let targetGroup: SchemaFieldGroup;
 		if (key) {
 			const groupSchema: JsonSchema = {
 				type: 'object',
@@ -237,9 +250,9 @@ export class SchemaService {
 				properties: {},
 			};
 			this.addGroup(groupSchema, parent, key);
-			targetGroup = (parent as FieldGroup).fields[key] as FieldGroup;
+			targetGroup = (parent as SchemaFieldGroup).fields[key] as SchemaFieldGroup;
 		} else {
-			targetGroup = parent as FieldGroup;
+			targetGroup = parent as SchemaFieldGroup;
 		}
 
 		// Create checkbox fields for each anyOf option
@@ -251,12 +264,12 @@ export class SchemaService {
 			// Create a control for the checkbox (not added to FormGroup)
 			const conditionalControl = new FormControl(false);
 
-			const checkboxField: FieldConfig = {
+			const checkboxField: SchemaFieldConfig = {
 				label: anyOfSchema.title || `${baseKey} option ${i + 1}`,
 				controlRef: conditionalControl,
 				key: checkboxKey,
 				uniqueKey: `${targetGroup.uniqueKey}_${checkboxKey}`,
-				type: FieldType.Checkbox,
+				type: SchemaFieldType.Checkbox,
 				parent: targetGroup,
 				conditionalSchemas: [
 					{
@@ -287,8 +300,12 @@ export class SchemaService {
 	 * @param parent The parent FieldGroup or FieldArray to add fields to
 	 * @param key Optional key to use for the oneOf field (when processing a property)
 	 */
-	private handleOneOf(schema: JsonSchema, parent: FieldGroup | FieldArray, key?: string): void {
-		if (parent.type !== FieldType.Group) {
+	private handleOneOf(
+		schema: JsonSchema,
+		parent: SchemaFieldGroup | SchemaFieldArray,
+		key?: string,
+	): void {
+		if (parent.type !== SchemaFieldType.Group) {
 			console.warn('oneOf requires parent to be a FieldGroup', schema);
 			return;
 		}
@@ -296,7 +313,7 @@ export class SchemaService {
 		const baseKey = key || 'oneOf';
 
 		// If we have a key, create a group for this property; otherwise use parent directly
-		let targetGroup: FieldGroup;
+		let targetGroup: SchemaFieldGroup;
 		if (key) {
 			const groupSchema: JsonSchema = {
 				type: 'object',
@@ -304,9 +321,9 @@ export class SchemaService {
 				properties: {},
 			};
 			this.addGroup(groupSchema, parent, key);
-			targetGroup = (parent as FieldGroup).fields[key] as FieldGroup;
+			targetGroup = (parent as SchemaFieldGroup).fields[key] as SchemaFieldGroup;
 		} else {
-			targetGroup = parent as FieldGroup;
+			targetGroup = parent as SchemaFieldGroup;
 		}
 
 		// Create radio field for oneOf selection
@@ -326,12 +343,12 @@ export class SchemaService {
 		const conditionalControl = new FormControl(null);
 
 		const radioKey = `${baseKey}_oneOf_selector`;
-		const radioField: FieldConfig = {
+		const radioField: SchemaFieldConfig = {
 			label: schema.title || baseKey,
 			controlRef: conditionalControl,
 			key: radioKey,
 			uniqueKey: `${targetGroup.uniqueKey}_${radioKey}`,
-			type: FieldType.Radio,
+			type: SchemaFieldType.Radio,
 			options,
 			parent: targetGroup,
 			conditionalSchemas: schema.oneOf!.map((oneOfSchema, i) => ({
@@ -355,17 +372,17 @@ export class SchemaService {
 	 * Creates a new FormGroup for the groupRef property in FieldGroup, and assigns
 	 * properties of the FieldGroup based on the schema
 	 */
-	addGroup(schema: JsonSchema, parent: FieldGroup | FieldArray, key: string): void {
+	addGroup(schema: JsonSchema, parent: SchemaFieldGroup | SchemaFieldArray, key: string): void {
 		// Create a new FormGroup
 		const formGroup = new FormGroup({});
 
 		// Create the FieldGroup config
-		const fieldGroup: FieldGroup = {
+		const fieldGroup: SchemaFieldGroup = {
 			label: schema.title || this.snakeCaseToLabel(key),
 			groupRef: formGroup,
 			key,
 			uniqueKey: `${parent.uniqueKey}_${key}`,
-			type: FieldType.Group,
+			type: SchemaFieldType.Group,
 			fields: {},
 			parent,
 			conditionalSchemas: [],
@@ -377,12 +394,12 @@ export class SchemaService {
 		}
 
 		// Add to parent
-		if (parent.type === FieldType.Group) {
-			const parentGroup = parent as FieldGroup;
+		if (parent.type === SchemaFieldType.Group) {
+			const parentGroup = parent as SchemaFieldGroup;
 			parentGroup.fields[key] = fieldGroup;
 			parentGroup.groupRef?.addControl(key, formGroup);
-		} else if (parent.type === FieldType.Array) {
-			const parentArray = parent as FieldArray;
+		} else if (parent.type === SchemaFieldType.Array) {
+			const parentArray = parent as SchemaFieldArray;
 			parentArray.items.push(fieldGroup);
 			parentArray.arrayRef?.push(formGroup);
 		}
@@ -394,10 +411,10 @@ export class SchemaService {
 	/**
 	 * Removes a group from the parent FormGroup or FormArray and from parent fields/items
 	 */
-	removeGroup(key: string, parent: FieldGroup | FieldArray): void {
-		if (parent.type === FieldType.Group) {
-			const parentGroup = parent as FieldGroup;
-			const fieldGroup = parentGroup.fields[key] as FieldGroup;
+	removeGroup(key: string, parent: SchemaFieldGroup | SchemaFieldArray): void {
+		if (parent.type === SchemaFieldType.Group) {
+			const parentGroup = parent as SchemaFieldGroup;
+			const fieldGroup = parentGroup.fields[key] as SchemaFieldGroup;
 
 			// Recursively clean up subscriptions for all nested fields
 			if (fieldGroup) {
@@ -408,12 +425,12 @@ export class SchemaService {
 			parentGroup.groupRef?.removeControl(key);
 			// Remove from fields object
 			delete parentGroup.fields[key];
-		} else if (parent.type === FieldType.Array) {
-			const parentArray = parent as FieldArray;
+		} else if (parent.type === SchemaFieldType.Array) {
+			const parentArray = parent as SchemaFieldArray;
 			// Find and remove from items array
 			const index = parentArray.items.findIndex(item => item.key === key);
 			if (index !== -1) {
-				const fieldGroup = parentArray.items[index] as FieldGroup;
+				const fieldGroup = parentArray.items[index] as SchemaFieldGroup;
 
 				// Recursively clean up subscriptions for all nested fields
 				if (fieldGroup) {
@@ -429,7 +446,7 @@ export class SchemaService {
 	/**
 	 * New-up a FormControl, and assigns FieldConfig properties based on the schema
 	 */
-	addField(schema: JsonSchema, parent: FieldGroup | FieldArray, key: string): void {
+	addField(schema: JsonSchema, parent: SchemaFieldGroup | SchemaFieldArray, key: string): void {
 		// Build validators using helper method
 		const { validators, validations } = this.buildValidators(schema, parent);
 
@@ -438,27 +455,27 @@ export class SchemaService {
 		const control = new FormControl(defaultValue, validators);
 
 		// Determine field type
-		let fieldType: FieldType;
+		let fieldType: SchemaFieldType;
 		if (schema.enum) {
 			// Use select for 5+ items, radio for 4 or less
-			fieldType = schema.enum.length >= 5 ? FieldType.Select : FieldType.Radio;
+			fieldType = schema.enum.length >= 5 ? SchemaFieldType.Select : SchemaFieldType.Radio;
 		} else {
 			// Map schema type to field type
 			switch (schema.type) {
 				case 'boolean':
-					fieldType = FieldType.Checkbox;
+					fieldType = SchemaFieldType.Checkbox;
 					break;
 				case 'number':
 				case 'integer':
-					fieldType = FieldType.Number;
+					fieldType = SchemaFieldType.Number;
 					break;
 				default:
-					fieldType = FieldType.Text;
+					fieldType = SchemaFieldType.Text;
 			}
 		}
 
 		// Create field config
-		const fieldConfig: FieldConfig = {
+		const fieldConfig: SchemaFieldConfig = {
 			label: schema.title || key,
 			controlRef: control,
 			key,
@@ -482,12 +499,12 @@ export class SchemaService {
 		this.subscriptions.set(fieldConfig.uniqueKey, subscription);
 
 		// Add to parent
-		if (parent.type === FieldType.Group) {
-			const parentGroup = parent as FieldGroup;
+		if (parent.type === SchemaFieldType.Group) {
+			const parentGroup = parent as SchemaFieldGroup;
 			parentGroup.fields[key] = fieldConfig;
 			parentGroup.groupRef?.addControl(key, control);
-		} else if (parent.type === FieldType.Array) {
-			const parentArray = parent as FieldArray;
+		} else if (parent.type === SchemaFieldType.Array) {
+			const parentArray = parent as SchemaFieldArray;
 			parentArray.items.push(fieldConfig);
 			parentArray.arrayRef?.push(control);
 		}
@@ -497,9 +514,9 @@ export class SchemaService {
 	 * Removes the form control from the form group via the groupRef property of
 	 * the parent, and remove the field config from the parent field group or array.
 	 */
-	removeField(key: string, parent: FieldGroup): void {
-		if (parent.type === FieldType.Group) {
-			const field = parent.fields[key] as FieldConfig;
+	removeField(key: string, parent: SchemaFieldGroup): void {
+		if (parent.type === SchemaFieldType.Group) {
+			const field = parent.fields[key] as SchemaFieldConfig;
 
 			// Unsubscribe from valueChanges if subscription exists
 			if (field) {
@@ -520,7 +537,7 @@ export class SchemaService {
 	/**
 	 * New-up a FormArray, and assigns FieldArray properties based on the schema
 	 */
-	addArray(schema: JsonSchema, parent: FieldGroup | FieldArray, key: string): void {
+	addArray(schema: JsonSchema, parent: SchemaFieldGroup | SchemaFieldArray, key: string): void {
 		// Create a new FormArray
 		const formArray = new FormArray<any>([]);
 
@@ -537,12 +554,12 @@ export class SchemaService {
 		const itemSchema = Array.isArray(schema.items) ? schema.items[0] : schema.items;
 
 		// Create the FieldArray config
-		const fieldArray: FieldArray = {
+		const fieldArray: SchemaFieldArray = {
 			label: schema.title || this.snakeCaseToLabel(key),
 			arrayRef: formArray,
 			key,
 			uniqueKey: `${parent.uniqueKey}_${key}`,
-			type: FieldType.Array,
+			type: SchemaFieldType.Array,
 			description: schema.description,
 			items: [],
 			itemSchema, // Store the schema template for array items
@@ -558,12 +575,12 @@ export class SchemaService {
 		};
 
 		// Add to parent
-		if (parent.type === FieldType.Group) {
-			const parentGroup = parent as FieldGroup;
+		if (parent.type === SchemaFieldType.Group) {
+			const parentGroup = parent as SchemaFieldGroup;
 			parentGroup.fields[key] = fieldArray;
 			parentGroup.groupRef?.addControl(key, formArray);
-		} else if (parent.type === FieldType.Array) {
-			const parentArray = parent as FieldArray;
+		} else if (parent.type === SchemaFieldType.Array) {
+			const parentArray = parent as SchemaFieldArray;
 			parentArray.items.push(fieldArray);
 			parentArray.arrayRef?.push(formArray);
 		}
@@ -585,10 +602,10 @@ export class SchemaService {
 	/**
 	 * Removes the form array from the parent FormGroup or FormArray and from parent fields/items
 	 */
-	removeArray(key: string, parent: FieldGroup | FieldArray): void {
-		if (parent.type === FieldType.Group) {
-			const parentGroup = parent as FieldGroup;
-			const fieldArray = parentGroup.fields[key] as FieldArray;
+	removeArray(key: string, parent: SchemaFieldGroup | SchemaFieldArray): void {
+		if (parent.type === SchemaFieldType.Group) {
+			const parentGroup = parent as SchemaFieldGroup;
+			const fieldArray = parentGroup.fields[key] as SchemaFieldArray;
 
 			// Recursively clean up subscriptions for all items in the array
 			if (fieldArray) {
@@ -599,12 +616,12 @@ export class SchemaService {
 			parentGroup.groupRef?.removeControl(key);
 			// Remove from fields object
 			delete parentGroup.fields[key];
-		} else if (parent.type === FieldType.Array) {
-			const parentArray = parent as FieldArray;
+		} else if (parent.type === SchemaFieldType.Array) {
+			const parentArray = parent as SchemaFieldArray;
 			// Find and remove from items array
 			const index = parentArray.items.findIndex(item => item.key === key);
 			if (index !== -1) {
-				const fieldArray = parentArray.items[index] as FieldArray;
+				const fieldArray = parentArray.items[index] as SchemaFieldArray;
 
 				// Recursively clean up subscriptions for all items in the array
 				if (fieldArray) {
@@ -621,7 +638,7 @@ export class SchemaService {
 	 * Adds a new item to a FieldArray based on the itemSchema.
 	 * Determines the type of item to add (field, group, or array) and creates it.
 	 */
-	addArrayItem(fieldArray: FieldArray): void {
+	addArrayItem(fieldArray: SchemaFieldArray): void {
 		if (!fieldArray.itemSchema) {
 			console.warn('No item schema available for array:', fieldArray.key);
 			return;
@@ -643,7 +660,7 @@ export class SchemaService {
 	/**
 	 * Removes an item from a FieldArray at the specified index.
 	 */
-	removeArrayItem(fieldArray: FieldArray, index: number): void {
+	removeArrayItem(fieldArray: SchemaFieldArray, index: number): void {
 		if (index < 0 || index >= fieldArray.items.length) {
 			return;
 		}
@@ -651,12 +668,12 @@ export class SchemaService {
 		const item = fieldArray.items[index];
 
 		// Clean up subscriptions based on item type
-		if (item.type === FieldType.Group) {
-			this.cleanupFieldSubscriptions(item as FieldGroup);
-		} else if (item.type === FieldType.Array) {
-			this.cleanupArraySubscriptions(item as FieldArray);
+		if (item.type === SchemaFieldType.Group) {
+			this.cleanupFieldSubscriptions(item as SchemaFieldGroup);
+		} else if (item.type === SchemaFieldType.Array) {
+			this.cleanupArraySubscriptions(item as SchemaFieldArray);
 		} else {
-			const fieldConfig = item as FieldConfig;
+			const fieldConfig = item as SchemaFieldConfig;
 			const subscription = this.subscriptions.get(fieldConfig.uniqueKey);
 			if (subscription) {
 				subscription.unsubscribe();
@@ -685,9 +702,9 @@ export class SchemaService {
 	 * - anyOf: add/remove properties based on checkbox state
 	 */
 	handleConditionalSchemas(
-		field: FieldConfig,
+		field: SchemaFieldConfig,
 		currentValue: any,
-		parent: FieldGroup | FieldArray,
+		parent: SchemaFieldGroup | SchemaFieldArray,
 	): void {
 		if (!field.conditionalSchemas || field.conditionalSchemas.length === 0) {
 			return;
@@ -706,13 +723,13 @@ export class SchemaService {
 				if (shouldRemove || !shouldAdd) {
 					// Remove all previously added keys
 					for (const key of conditionalSchema.addedKeys) {
-						if (parent.type === FieldType.Group) {
-							const parentGroup = parent as FieldGroup;
+						if (parent.type === SchemaFieldType.Group) {
+							const parentGroup = parent as SchemaFieldGroup;
 							const field = parentGroup.fields[key];
 							if (field) {
-								if (field.type === FieldType.Group) {
+								if (field.type === SchemaFieldType.Group) {
 									this.removeGroup(key, parent);
-								} else if (field.type === FieldType.Array) {
+								} else if (field.type === SchemaFieldType.Array) {
 									this.removeArray(key, parent);
 								} else {
 									this.removeField(key, parentGroup);
@@ -742,14 +759,14 @@ export class SchemaService {
 	 */
 	private buildValidators(
 		schema: JsonSchema,
-		parent: FieldGroup | FieldArray,
+		parent: SchemaFieldGroup | SchemaFieldArray,
 	): { validators: any[]; validations: any } {
 		const validators = [];
 		const validations: any = {};
 
 		// Check if field is required
-		if (parent.type === FieldType.Group) {
-			const parentGroup = parent as FieldGroup;
+		if (parent.type === SchemaFieldType.Group) {
+			const parentGroup = parent as SchemaFieldGroup;
 			if (parentGroup.validations?.required) {
 				validators.push(Validators.required);
 				validations.required = true;
@@ -793,19 +810,21 @@ export class SchemaService {
 	 * Helper method to process a schema and add its properties/fields to a parent.
 	 * Returns an array of keys that were added (for tracking in ConditionalSchema.addedKeys)
 	 */
-	processProperties(schema: JsonSchema, parent: FieldGroup | FieldArray): string[] {
+	processProperties(schema: JsonSchema, parent: SchemaFieldGroup | SchemaFieldArray): string[] {
 		const addedKeys: string[] = [];
 
 		// Track the keys before processing
 		const keysBefore =
-			parent.type === FieldType.Group ? Object.keys((parent as FieldGroup).fields) : [];
+			parent.type === SchemaFieldType.Group
+				? Object.keys((parent as SchemaFieldGroup).fields)
+				: [];
 
 		// Process the schema, which will handle properties, anyOf, oneOf, if/then/else, etc.
 		this.processSchema(schema, parent);
 
 		// Track the keys after processing to determine what was added
-		if (parent.type === FieldType.Group) {
-			const keysAfter = Object.keys((parent as FieldGroup).fields);
+		if (parent.type === SchemaFieldType.Group) {
+			const keysAfter = Object.keys((parent as SchemaFieldGroup).fields);
 			for (const key of keysAfter) {
 				if (!keysBefore.includes(key)) {
 					addedKeys.push(key);
@@ -819,17 +838,17 @@ export class SchemaService {
 	/**
 	 * Recursively cleans up all subscriptions for fields within a FieldGroup
 	 */
-	public cleanupFieldSubscriptions(fieldGroup: FieldGroup): void {
+	public cleanupFieldSubscriptions(fieldGroup: SchemaFieldGroup): void {
 		for (const field of Object.values(fieldGroup.fields)) {
-			if (field.type === FieldType.Group) {
+			if (field.type === SchemaFieldType.Group) {
 				// Recursively clean up nested groups
-				this.cleanupFieldSubscriptions(field as FieldGroup);
-			} else if (field.type === FieldType.Array) {
+				this.cleanupFieldSubscriptions(field as SchemaFieldGroup);
+			} else if (field.type === SchemaFieldType.Array) {
 				// Recursively clean up arrays
-				this.cleanupArraySubscriptions(field as FieldArray);
+				this.cleanupArraySubscriptions(field as SchemaFieldArray);
 			} else {
 				// Clean up field subscription
-				const fieldConfig = field as FieldConfig;
+				const fieldConfig = field as SchemaFieldConfig;
 				const subscription = this.subscriptions.get(fieldConfig.uniqueKey);
 				if (subscription) {
 					subscription.unsubscribe();
@@ -842,17 +861,17 @@ export class SchemaService {
 	/**
 	 * Recursively cleans up all subscriptions for items within a FieldArray
 	 */
-	private cleanupArraySubscriptions(fieldArray: FieldArray): void {
+	private cleanupArraySubscriptions(fieldArray: SchemaFieldArray): void {
 		for (const item of fieldArray.items) {
-			if (item.type === FieldType.Group) {
+			if (item.type === SchemaFieldType.Group) {
 				// Recursively clean up nested groups
-				this.cleanupFieldSubscriptions(item as FieldGroup);
-			} else if (item.type === FieldType.Array) {
+				this.cleanupFieldSubscriptions(item as SchemaFieldGroup);
+			} else if (item.type === SchemaFieldType.Array) {
 				// Recursively clean up nested arrays
-				this.cleanupArraySubscriptions(item as FieldArray);
+				this.cleanupArraySubscriptions(item as SchemaFieldArray);
 			} else {
 				// Clean up field subscription
-				const fieldConfig = item as FieldConfig;
+				const fieldConfig = item as SchemaFieldConfig;
 				const subscription = this.subscriptions.get(fieldConfig.uniqueKey);
 				if (subscription) {
 					subscription.unsubscribe();

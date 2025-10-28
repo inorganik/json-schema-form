@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, inject, OnInit } from '@angular/core';
 import { FieldContainerComponent } from '../form-components/field-container.component';
-import { FieldGroup } from '../models/form-models';
+import { SchemaFieldGroup } from '../models/form-models';
 import { SchemaService } from '../services/schema.service';
 
 @Component({
@@ -13,7 +13,7 @@ import { SchemaService } from '../services/schema.service';
 	`,
 })
 export class IfThenElseTestComponent implements OnInit {
-	groupConfig: FieldGroup;
+	groupConfig: SchemaFieldGroup;
 	private http = inject(HttpClient);
 	private schemaService = inject(SchemaService);
 

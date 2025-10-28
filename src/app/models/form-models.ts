@@ -1,7 +1,7 @@
 import { FormArray, FormControl, FormGroup } from '@angular/forms';
 import { JsonSchema } from './schema-models';
 
-export enum FieldType {
+export enum SchemaFieldType {
 	Select = 'select',
 	Radio = 'radio',
 	Number = 'number',
@@ -41,42 +41,42 @@ export interface ConditionalSchema {
 	addedKeys?: string[];
 }
 
-export interface FieldConfig {
+export interface SchemaFieldConfig {
 	label: string;
 	controlRef: FormControl;
 	key: string;
 	uniqueKey: string;
-	type: FieldType;
+	type: SchemaFieldType;
 	description?: string;
 	options?: { label: string; value: any }[];
 	validations?: FieldValidations;
-	parent: FieldGroup | FieldArray;
+	parent: SchemaFieldGroup | SchemaFieldArray;
 	conditionalSchemas?: ConditionalSchema[];
 }
 
-export interface FieldGroup {
+export interface SchemaFieldGroup {
 	label: string;
 	groupRef: FormGroup;
 	key: string;
 	uniqueKey: string;
-	type: FieldType;
-	fields: { [key: string]: FieldConfig | FieldGroup | FieldArray };
+	type: SchemaFieldType;
+	fields: { [key: string]: SchemaFieldConfig | SchemaFieldGroup | SchemaFieldArray };
 	validations?: FieldValidations;
-	parent: FieldGroup | FieldArray | null;
+	parent: SchemaFieldGroup | SchemaFieldArray | null;
 	conditionalSchemas?: ConditionalSchema[];
 }
 
-export interface FieldArray {
+export interface SchemaFieldArray {
 	label: string;
 	arrayRef: FormArray;
 	key: string;
 	uniqueKey: string;
-	type: FieldType;
+	type: SchemaFieldType;
 	description?: string;
-	items: Array<FieldConfig | FieldGroup | FieldArray>; // holds added item configs
+	items: Array<SchemaFieldConfig | SchemaFieldGroup | SchemaFieldArray>; // holds added item configs
 	itemSchema?: JsonSchema; // Schema template for array items
 	validations?: FieldArrayValidations;
 	canAddItem: () => boolean;
-	parent: FieldGroup | FieldArray;
+	parent: SchemaFieldGroup | SchemaFieldArray;
 	conditionalSchemas?: ConditionalSchema[];
 }

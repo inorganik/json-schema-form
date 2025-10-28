@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 import { ReactiveFormsModule } from '@angular/forms';
-import { FieldConfig } from '../models/form-models';
+import { SchemaFieldConfig } from '../models/form-models';
 
 @Component({
 	selector: 'app-text-input-field',
@@ -72,7 +72,7 @@ import { FieldConfig } from '../models/form-models';
 	],
 })
 export class TextInputFieldComponent {
-	@Input() config: FieldConfig;
+	@Input() config: SchemaFieldConfig;
 
 	ngOnInit() {
 		// console.log('text-input', this.config);

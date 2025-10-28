@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
-import { FieldConfig, FieldType } from '../models/form-models';
+import { SchemaFieldConfig, SchemaFieldType } from '../models/form-models';
 import { CheckboxFieldComponent } from './checkbox-field.component';
 import { RadioFieldComponent } from './radio-field.component';
 import { SelectFieldComponent } from './select-field.component';
@@ -37,10 +37,10 @@ import { TextInputFieldComponent } from './text-input-field.component';
 	styles: [],
 })
 export class FieldComponent {
-	@Input() config: FieldConfig;
+	@Input() config: SchemaFieldConfig;
 
 	// Expose FieldType enum to template
-	FieldType = FieldType;
+	FieldType = SchemaFieldType;
 
 	ngOnInit() {
 		// console.log('field', this.config);
