@@ -2,80 +2,97 @@
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
 	"title": "Enablement",
 	"type": "object",
-	"allOf": [
-		{
-			"properties": {
-				"title": {
-					"title": "Title",
-					"type": "string"
-				},
-				"cost": {
-					"title": "Cost",
-					"type": "number",
-					"minimum": 0
-				}
-			},
-			"required": ["title", "cost"]
-		}
-	],
 	"properties": {
 		"status": {
 			"title": "Status",
 			"enum": ["FLAG_CONTROLLED", "ENABLED", "DISABLED"]
+		},
+		"title": {
+			"title": "Title",
+			"type": "string"
+		},
+		"cost": {
+			"title": "Cost",
+			"type": "number",
+			"minimum": 0
 		}
 	},
-	"required": ["status"],
-	"if": {
-		"properties": {
-			"status": {
-				"const": "FLAG_CONTROLLED"
-			}
-		}
-	},
-	"then": {
-		"properties": {
-			"flags": {
-				"oneOf": [
-					{
-						"title": "Product flag",
-						"properties": {
-							"productFlag": {
-								"$ref": "#/$defs/productFlag"
-							}
-						},
-						"required": ["productFlag"]
-					},
-					{
-						"title": "LaunchDarkly feature flag",
-						"properties": {
-							"ldFeatureFlag": {
-								"$ref": "#/$defs/ldFeatureFlag"
-							}
-						},
-						"required": ["ldFeatureFlag"]
-					},
-					{
-						"title": "Logical OR",
-						"properties": {
-							"or": {
-								"$ref": "#/$defs/logicArray"
-							}
-						},
-						"required": ["or"]
-					},
-					{
-						"title": "Logical AND",
-						"properties": {
-							"and": {
-								"$ref": "#/$defs/logicArray"
-							}
-						},
-						"required": ["and"]
+	"required": ["status", "title", "cost"],
+	"allOf": [
+		{
+			"if": {
+				"properties": {
+					"status": {
+						"const": "FLAG_CONTROLLED"
 					}
-				]
+				}
+			},
+			"then": {
+				"properties": {
+					"flags": {
+						"oneOf": [
+							{
+								"title": "Product flag",
+								"properties": {
+									"productFlag": {
+										"$ref": "#/$defs/productFlag"
+									}
+								},
+								"required": ["productFlag"]
+							},
+							{
+								"title": "LaunchDarkly feature flag",
+								"properties": {
+									"ldFeatureFlag": {
+										"$ref": "#/$defs/ldFeatureFlag"
+									}
+								},
+								"required": ["ldFeatureFlag"]
+							},
+							{
+								"title": "Logical OR",
+								"properties": {
+									"or": {
+										"$ref": "#/$defs/logicArray"
+									}
+								},
+								"required": ["or"]
+							},
+							{
+								"title": "Logical AND",
+								"properties": {
+									"and": {
+										"$ref": "#/$defs/logicArray"
+									}
+								},
+								"required": ["and"]
+							}
+						]
+					}
+				},
+				"required": ["flags"]
+			}
+		},
+		{
+			"if": {
+				"properties": {
+					"status": {
+						"const": "ENABLED"
+					}
+				}
+			},
+			"then": {
+				"properties": {
+					"name": {
+						"title": "Name",
+						"type": "string"
+					}
+				},
+				"required": ["name"]
 			}
 		}
-	},
+	],
+
 	"$defs": {
 		"logicArray": {
 			"type": "array",

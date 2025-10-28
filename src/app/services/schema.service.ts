@@ -8,8 +8,11 @@ import { JsonSchema } from '../models/schema-models';
 	providedIn: 'root',
 })
 export class SchemaService {
+	// A cache of all $defs in the schemas
+	public defsMap = new Map();
+
+	// subscriptions for watching field values
 	private subscriptions = new Map<string, Subscription>();
-	private rootSchema: JsonSchema | null = null;
 
 	constructor() {}
 
@@ -20,8 +23,14 @@ export class SchemaService {
 	 * Returns the root FieldGroup representing the entire form
 	 */
 	schemaToFieldConfig(schema: JsonSchema): FieldGroup {
-		// Store the root schema for resolving $refs
-		this.rootSchema = schema;
+		// set defs
+		if (schema.$defs) {
+			for (const [key, definition] of Object.entries(schema.$defs)) {
+				if (!this.defsMap.has(key)) {
+					this.defsMap.set(key, definition);
+				}
+			}
+		}
 
 		// Create the root field group
 		const rootGroup: FieldGroup = {
@@ -47,32 +56,21 @@ export class SchemaService {
 	}
 
 	/**
-	 * Resolves a $ref path to get the referenced schema from $defs or definitions.
-	 * Supports JSON Pointer format like "#/$defs/productFlag" or "#/definitions/productFlag"
-	 *
-	 * @param ref The $ref string (e.g., "#/$defs/productFlag")
-	 * @returns The resolved schema or null if not found
+	 * Resolves a $ref path to get the referenced schema from the defsMap
 	 */
 	private resolveRef(ref: string): JsonSchema | null {
-		if (!this.rootSchema || !ref.startsWith('#/')) {
+		const defsPath = '#/$defs/';
+		let key = '';
+		if (ref.startsWith(defsPath)) {
+			key = ref.slice(defsPath.length);
+		}
+
+		if (this.defsMap.has(key)) {
+			return this.defsMap.get(key);
+		} else {
+			console.warn(`Could not resolve $ref: ${ref}`);
 			return null;
 		}
-
-		// Remove the leading "#/" and split the path
-		const path = ref.substring(2).split('/');
-
-		// Navigate through the path to find the referenced schema
-		let current: any = this.rootSchema;
-		for (const segment of path) {
-			if (current && typeof current === 'object' && segment in current) {
-				current = current[segment];
-			} else {
-				console.warn(`Could not resolve $ref: ${ref}`);
-				return null;
-			}
-		}
-
-		return current as JsonSchema;
 	}
 
 	/**
@@ -93,8 +91,6 @@ export class SchemaService {
 	 * @param key Optional key to use for oneOf/anyOf fields (when processing a property)
 	 */
 	private processSchema(schema: JsonSchema, parent: FieldGroup | FieldArray, key?: string): void {
-		// console.log('process schema', schema, 'key:', key);
-
 		// Handle $ref - resolve and process the referenced schema
 		if (schema.$ref) {
 			const resolvedSchema = this.resolveRef(schema.$ref);
@@ -103,14 +99,6 @@ export class SchemaService {
 				this.processSchema(resolvedSchema, parent, key);
 			}
 			return;
-		}
-
-		// Process allOf - merge all schemas at the same level
-		if (schema.allOf) {
-			for (const allOfSchema of schema.allOf) {
-				// Recursively process each allOf schema to handle nested conditionals
-				this.processSchema(allOfSchema, parent);
-			}
 		}
 
 		// Handle anyOf - create checkbox fields for each option
@@ -133,7 +121,7 @@ export class SchemaService {
 			return;
 		}
 
-		// Process regular properties FIRST (before if/then/else)
+		// Process regular properties FIRST (before allOf and if/then/else)
 		if (schema.properties) {
 			for (const [propKey, propertySchema] of Object.entries(schema.properties)) {
 				// Handle $ref in property schema
@@ -161,14 +149,41 @@ export class SchemaService {
 			}
 		}
 
+		// Process allOf - merge all schemas at the same level
+		// This is processed AFTER properties so fields exist before we attach conditionals
+		if (schema.allOf) {
+			for (const allOfSchema of schema.allOf) {
+				// Recursively process each allOf schema to handle nested conditionals
+				this.processSchema(allOfSchema, parent);
+			}
+		}
+
 		// Handle if/then/else - add conditional schemas to the field referenced in "if"
 		// This is processed AFTER properties so the referenced field exists
 		if (schema.if && schema.then) {
 			// Find the field referenced in the "if" condition
 			if (schema.if.properties) {
 				for (const [ifKey, ifSchema] of Object.entries(schema.if.properties)) {
-					const field = (parent as FieldGroup).fields[ifKey] as FieldConfig;
-					if (field && field.conditionalSchemas) {
+					// Look for the field in the parent group
+					// Walk up the tree if needed to find the root group where the field is defined
+					let targetGroup =
+						parent.type === FieldType.Group ? (parent as FieldGroup) : null;
+					let field: FieldConfig | FieldGroup | FieldArray | undefined;
+
+					if (targetGroup) {
+						field = targetGroup.fields[ifKey];
+
+						// If not found and we have a parent, check the parent (for nested allOf scenarios)
+						if (
+							!field &&
+							targetGroup.parent &&
+							targetGroup.parent.type === FieldType.Group
+						) {
+							field = (targetGroup.parent as FieldGroup).fields[ifKey];
+						}
+					}
+
+					if (field && 'conditionalSchemas' in field && field.conditionalSchemas) {
 						// Get the condition value (const value in the if schema)
 						const conditionValue = ifSchema.const;
 
@@ -231,7 +246,7 @@ export class SchemaService {
 		// These controls are NOT added to the FormGroup, so they won't appear in form value
 		for (let i = 0; i < schema.anyOf!.length; i++) {
 			const anyOfSchema = schema.anyOf![i];
-			const checkboxKey = `${baseKey}_anyOf_${i}`;
+			const checkboxKey = `${baseKey}_anyOf_${i + 1}`;
 
 			// Create a control for the checkbox (not added to FormGroup)
 			const conditionalControl = new FormControl(false);
@@ -337,7 +352,7 @@ export class SchemaService {
 	}
 
 	/**
-	 * It creates a new FormGroup for the groupRef property in FieldGroup, and assigns
+	 * Creates a new FormGroup for the groupRef property in FieldGroup, and assigns
 	 * properties of the FieldGroup based on the schema
 	 */
 	addGroup(schema: JsonSchema, parent: FieldGroup | FieldArray, key: string): void {
@@ -346,7 +361,7 @@ export class SchemaService {
 
 		// Create the FieldGroup config
 		const fieldGroup: FieldGroup = {
-			label: schema.title || key,
+			label: schema.title || this.snakeCaseToLabel(key),
 			groupRef: formGroup,
 			key,
 			uniqueKey: `${parent.uniqueKey}_${key}`,
@@ -458,7 +473,6 @@ export class SchemaService {
 
 		// Set up valueChanges subscription for conditional schemas
 		const subscription = control.valueChanges.subscribe(value => {
-			// console.log('field changed', fieldConfig, value);
 			if (fieldConfig.conditionalSchemas && fieldConfig.conditionalSchemas.length > 0) {
 				this.handleConditionalSchemas(fieldConfig, value, parent);
 			}
@@ -524,7 +538,7 @@ export class SchemaService {
 
 		// Create the FieldArray config
 		const fieldArray: FieldArray = {
-			label: schema.title || key,
+			label: schema.title || this.snakeCaseToLabel(key),
 			arrayRef: formArray,
 			key,
 			uniqueKey: `${parent.uniqueKey}_${key}`,
@@ -612,10 +626,9 @@ export class SchemaService {
 			console.warn('No item schema available for array:', fieldArray.key);
 			return;
 		}
-		// console.log('item schema', fieldArray.itemSchema);
 
 		// Generate a unique key for this array item
-		const itemKey = `${fieldArray.key}_item_${fieldArray.items.length}`;
+		const itemKey = `${fieldArray.key}_item_${fieldArray.items.length + 1}`;
 
 		// Determine what type of item to add based on schema type
 		if (fieldArray.itemSchema.type === 'object') {
@@ -806,8 +819,8 @@ export class SchemaService {
 	/**
 	 * Recursively cleans up all subscriptions for fields within a FieldGroup
 	 */
-	private cleanupFieldSubscriptions(fieldGroup: FieldGroup): void {
-		for (const [key, field] of Object.entries(fieldGroup.fields)) {
+	public cleanupFieldSubscriptions(fieldGroup: FieldGroup): void {
+		for (const field of Object.values(fieldGroup.fields)) {
 			if (field.type === FieldType.Group) {
 				// Recursively clean up nested groups
 				this.cleanupFieldSubscriptions(field as FieldGroup);
@@ -864,10 +877,14 @@ export class SchemaService {
 	 * Converts a snake-case string to a human-readable label.
 	 * Example: 'FLAG_CONTROLLED' => 'Flag Controlled'
 	 */
-	private snakeCaseToLabel(value: any): string {
+	private snakeCaseToLabel(value: string): string {
 		// If the value is not a string, return it as-is
 		if (typeof value !== 'string') {
 			return String(value);
+		}
+		if (value.length <= 4) {
+			// handle acronyms
+			return value.toUpperCase();
 		}
 
 		// Convert snake_case to Title Case
