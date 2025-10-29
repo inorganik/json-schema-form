@@ -404,8 +404,38 @@ export class SchemaService {
 			parentArray.arrayRef?.push(formGroup);
 		}
 
+		// Check if this object has no properties - if so, add a parameter field for dynamic property addition
+		if (!schema.properties || Object.keys(schema.properties).length === 0) {
+			this.addParameter(fieldGroup);
+		}
+
 		// Process the schema recursively (handles properties, allOf, anyOf, oneOf, if/then/else)
 		this.processSchema(schema, fieldGroup);
+	}
+
+	/**
+	 * Adds a parameter field to a field group. This is used for object types that have no
+	 * defined properties, allowing users to dynamically add fields with custom keys.
+	 * The parameter field provides a text input for the key name and an "Add" button.
+	 * The control is NOT added to the parent group since it's only used for the key name.
+	 */
+	addParameter(parent: SchemaFieldGroup): void {
+		// Create a form control for the parameter key input (not added to parent group)
+		const control = new FormControl('');
+
+		// Create the parameter field config
+		const parameterField: SchemaFieldConfig = {
+			label: 'Add parameter',
+			controlRef: control,
+			key: '_parameter',
+			uniqueKey: `${parent.uniqueKey}_parameter`,
+			type: SchemaFieldType.Parameter,
+			parent,
+			conditionalSchemas: [],
+		};
+
+		// Add to parent fields (but not to the FormGroup)
+		parent.fields['_parameter'] = parameterField;
 	}
 
 	/**
@@ -447,7 +477,12 @@ export class SchemaService {
 	/**
 	 * New-up a FormControl, and assigns FieldConfig properties based on the schema
 	 */
-	addField(schema: JsonSchema, parent: SchemaFieldGroup | SchemaFieldArray, key: string): void {
+	addField(
+		schema: JsonSchema,
+		parent: SchemaFieldGroup | SchemaFieldArray,
+		key: string,
+		removeable = false,
+	): void {
 		// Build validators using helper method
 		const { validators, validations } = this.buildValidators(schema, parent);
 
@@ -486,6 +521,7 @@ export class SchemaService {
 			options: schema.enum ? this.convertEnumToOptions(schema.enum) : undefined,
 			validations: Object.keys(validations).length > 0 ? validations : undefined,
 			parent,
+			removeable,
 			conditionalSchemas: [],
 		};
 
@@ -654,7 +690,7 @@ export class SchemaService {
 		}
 
 		// Generate a unique key for this array item
-		const itemKey = `${fieldArray.key}_item_${fieldArray.items.length + 1}`;
+		const itemKey = `${fieldArray.key}_${fieldArray.items.length + 1}`;
 
 		// Determine what type of item to add based on schema type
 		if (fieldArray.itemSchema.type === 'object') {
@@ -806,9 +842,11 @@ export class SchemaService {
 			validations.minimum = schema.minimum;
 		}
 		if (schema.exclusiveMaximum !== undefined) {
+			validators.push(Validators.max(schema.exclusiveMaximum - 1));
 			validations.exclusiveMaximum = schema.exclusiveMaximum;
 		}
 		if (schema.exclusiveMinimum !== undefined) {
+			validators.push(Validators.min(schema.exclusiveMinimum + 1));
 			validations.exclusiveMinimum = schema.exclusiveMinimum;
 		}
 

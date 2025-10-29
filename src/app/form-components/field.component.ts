@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 import { SchemaFieldConfig, SchemaFieldType } from '../models/form-models';
 import { CheckboxFieldComponent } from './checkbox-field.component';
+import { ParameterFieldComponent } from './parameter.component';
 import { RadioFieldComponent } from './radio-field.component';
 import { SelectFieldComponent } from './select-field.component';
 import { TextInputFieldComponent } from './text-input-field.component';
@@ -14,6 +15,7 @@ import { TextInputFieldComponent } from './text-input-field.component';
 		TextInputFieldComponent,
 		SelectFieldComponent,
 		RadioFieldComponent,
+		ParameterFieldComponent,
 	],
 	template: `
 		@switch (config.type) {
@@ -31,6 +33,9 @@ import { TextInputFieldComponent } from './text-input-field.component';
 			}
 			@case (FieldType.Checkbox) {
 				<app-checkbox-field [config]="config" />
+			}
+			@case (FieldType.Parameter) {
+				<app-parameter-field [config]="config" />
 			}
 		}
 	`,

@@ -2,32 +2,19 @@ import { CommonModule } from '@angular/common';
 import { Component, inject, Input } from '@angular/core';
 import { ReactiveFormsModule } from '@angular/forms';
 import { SchemaFieldConfig, SchemaFieldGroup } from '../models/form-models';
+import { JsonSchema } from '../models/schema-models';
 import { SchemaService } from '../services/schema.service';
 
 @Component({
-	selector: 'app-text-input-field',
+	selector: 'app-parameter-field',
 	imports: [CommonModule, ReactiveFormsModule],
 	template: `
 		<div class="form-field">
 			<label class="field-label">
 				{{ config.label }}
-				<span *ngIf="config.validations?.required" class="required">*</span>
 			</label>
-			<input [type]="config.type" [formControl]="config.controlRef" class="text-input" />
-			<small *ngIf="config.description" class="description">
-				{{ config.description }}
-			</small>
-			<div
-				*ngIf="config.controlRef.touched && config.controlRef.errors"
-				class="error-message"
-			>
-				<span *ngFor="let error of config.controlRef.errors | keyvalue">
-					{{ error.key }}: {{ error.value }}
-				</span>
-			</div>
-			@if (config.removeable) {
-				<button type="button" (click)="remove()" class="remove-btn">Remove</button>
-			}
+			<input type="text" [formControl]="config.controlRef" class="text-input" />
+			<button type="button" (click)="addParameter()">Add</button>
 		</div>
 	`,
 	styles: [
@@ -67,14 +54,6 @@ import { SchemaService } from '../services/schema.service';
 				margin-top: 0.5rem;
 				font-size: 0.875rem;
 			}
-			.remove-btn {
-				background: #dc3545;
-				color: white;
-				border: none;
-				padding: 0.5rem;
-				cursor: pointer;
-				flex-shrink: 0;
-			}
 			.error-message {
 				color: red;
 				font-size: 0.875rem;
@@ -83,16 +62,21 @@ import { SchemaService } from '../services/schema.service';
 		`,
 	],
 })
-export class TextInputFieldComponent {
+export class ParameterFieldComponent {
 	@Input() config: SchemaFieldConfig;
 
 	schemaService = inject(SchemaService);
 
-	ngOnInit() {
-		// console.log('text-input', this.config);
-	}
+	addParameter() {
+		const key = this.config.controlRef.value;
+		if (!key || key.trim() === '') {
+			return;
+		}
+		const schema: JsonSchema = {
+			type: 'string',
+		};
+		this.schemaService.addField(schema, this.config.parent as SchemaFieldGroup, key, true);
 
-	remove() {
-		this.schemaService.removeField(this.config.key, this.config.parent as SchemaFieldGroup);
+		this.config.controlRef.setValue('');
 	}
 }

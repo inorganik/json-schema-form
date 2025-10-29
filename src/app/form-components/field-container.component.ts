@@ -20,6 +20,9 @@ import { FieldComponent } from './field.component';
 					@if (config.label) {
 						<legend>{{ config.label }}</legend>
 					}
+					@if (config.description) {
+						<small>{{ config.description }}</small>
+					}
 					<div class="group-fields">
 						@for (field of getGroupEntries(config); track field.key) {
 							@switch (field.fieldConfig.type) {
@@ -47,6 +50,9 @@ import { FieldComponent } from './field.component';
 				<fieldset>
 					@if (config.label) {
 						<legend>{{ config.label }}</legend>
+					}
+					@if (config.description) {
+						<small>{{ config.description }}</small>
 					}
 					<div class="array-items">
 						@for (item of getArrayItems(config); track $index) {
@@ -77,6 +83,13 @@ import { FieldComponent } from './field.component';
 		`
 			.field-group {
 				margin-bottom: 1rem;
+			}
+
+			fieldset small {
+				display: block;
+				margin-top: -0.5rem;
+				margin-bottom: 0.75rem;
+				color: #666;
 			}
 
 			.group-fields {

@@ -15,6 +15,10 @@
 			"title": "Cost",
 			"type": "number",
 			"minimum": 0
+		},
+		"params": {
+			"title": "Params",
+			"type": "object"
 		}
 	},
 	"required": ["status", "title", "cost"],

@@ -4,6 +4,48 @@
 	"description": "Test schema with various array configurations",
 	"type": "object",
 	"properties": {
+		"links": {
+			"title": "Links",
+			"type": "array",
+			"description": "An array of link objects with different types",
+			"items": {
+				"type": "object",
+				"properties": {
+					"link": {
+						"title": "Link",
+						"oneOf": [
+							{
+								"title": "Action",
+								"type": "object",
+								"properties": {
+									"linkText": {
+										"title": "Link Text",
+										"type": "string"
+									}
+								},
+								"required": ["action", "linkText"],
+								"additionalProperties": false
+							},
+							{
+								"title": "API Action",
+								"type": "object",
+								"properties": {
+									"linkText": {
+										"title": "Link Text",
+										"type": "string"
+									}
+								},
+								"required": ["apiAction", "linkText"],
+								"additionalProperties": false
+							}
+						]
+					}
+				},
+				"required": ["link"]
+			},
+			"minItems": 1,
+			"maxItems": 2
+		},
 		"simpleArray": {
 			"type": "array",
 			"title": "Simple String Array",

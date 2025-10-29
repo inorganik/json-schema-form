@@ -9,6 +9,7 @@ export enum SchemaFieldType {
 	Checkbox = 'checkbox',
 	Group = 'group',
 	Array = 'array',
+	Parameter = 'parameter',
 }
 
 export interface FieldValidations {
@@ -54,6 +55,7 @@ export interface BaseSchemaConfig {
 export interface SchemaFieldConfig extends BaseSchemaConfig {
 	controlRef: FormControl;
 	options?: { label: string; value: any }[];
+	removeable?: boolean;
 	validations?: FieldValidations;
 }
 
