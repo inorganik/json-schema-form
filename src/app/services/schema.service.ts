@@ -412,6 +412,7 @@ export class SchemaService {
 	 * Removes a group from the parent FormGroup or FormArray and from parent fields/items
 	 */
 	removeGroup(key: string, parent: SchemaFieldGroup | SchemaFieldArray): void {
+		console.log('remove group', key);
 		if (parent.type === SchemaFieldType.Group) {
 			const parentGroup = parent as SchemaFieldGroup;
 			const fieldGroup = parentGroup.fields[key] as SchemaFieldGroup;
@@ -515,6 +516,7 @@ export class SchemaService {
 	 * the parent, and remove the field config from the parent field group or array.
 	 */
 	removeField(key: string, parent: SchemaFieldGroup): void {
+		console.log('remove field', key);
 		if (parent.type === SchemaFieldType.Group) {
 			const field = parent.fields[key] as SchemaFieldConfig;
 
@@ -570,6 +572,12 @@ export class SchemaService {
 				}
 				return true;
 			},
+			canRemoveItem: () => {
+				if (fieldArray.validations?.minItems !== undefined) {
+					return fieldArray.items.length > fieldArray.validations.minItems;
+				}
+				return true;
+			},
 			parent,
 			conditionalSchemas: [],
 		};
@@ -603,6 +611,7 @@ export class SchemaService {
 	 * Removes the form array from the parent FormGroup or FormArray and from parent fields/items
 	 */
 	removeArray(key: string, parent: SchemaFieldGroup | SchemaFieldArray): void {
+		console.log('remove array', key);
 		if (parent.type === SchemaFieldType.Group) {
 			const parentGroup = parent as SchemaFieldGroup;
 			const fieldArray = parentGroup.fields[key] as SchemaFieldArray;
@@ -819,8 +828,25 @@ export class SchemaService {
 				? Object.keys((parent as SchemaFieldGroup).fields)
 				: [];
 
-		// Process the schema, which will handle properties, anyOf, oneOf, if/then/else, etc.
-		this.processSchema(schema, parent);
+		// If the schema has properties, filter out properties that already exist in the parent
+		// This prevents re-adding fields when processing conditional schemas
+		if (schema.properties && parent.type === SchemaFieldType.Group) {
+			const filteredSchema = { ...schema };
+			filteredSchema.properties = {};
+
+			for (const [key, propertySchema] of Object.entries(schema.properties)) {
+				// Only include properties that don't already exist in the parent
+				if (!keysBefore.includes(key)) {
+					filteredSchema.properties[key] = propertySchema;
+				}
+			}
+
+			// Process the filtered schema
+			this.processSchema(filteredSchema, parent);
+		} else {
+			// Process the schema normally (for arrays or schemas without properties)
+			this.processSchema(schema, parent);
+		}
 
 		// Track the keys after processing to determine what was added
 		if (parent.type === SchemaFieldType.Group) {

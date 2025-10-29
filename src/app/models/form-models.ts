@@ -41,42 +41,33 @@ export interface ConditionalSchema {
 	addedKeys?: string[];
 }
 
-export interface SchemaFieldConfig {
+export interface BaseSchemaConfig {
 	label: string;
-	controlRef: FormControl;
+	description?: string;
 	key: string;
 	uniqueKey: string;
 	type: SchemaFieldType;
-	description?: string;
+	conditionalSchemas?: ConditionalSchema[];
+	parent: SchemaFieldGroup | SchemaFieldArray | null;
+}
+
+export interface SchemaFieldConfig extends BaseSchemaConfig {
+	controlRef: FormControl;
 	options?: { label: string; value: any }[];
 	validations?: FieldValidations;
-	parent: SchemaFieldGroup | SchemaFieldArray;
-	conditionalSchemas?: ConditionalSchema[];
 }
 
-export interface SchemaFieldGroup {
-	label: string;
+export interface SchemaFieldGroup extends BaseSchemaConfig {
 	groupRef: FormGroup;
-	key: string;
-	uniqueKey: string;
-	type: SchemaFieldType;
 	fields: { [key: string]: SchemaFieldConfig | SchemaFieldGroup | SchemaFieldArray };
 	validations?: FieldValidations;
-	parent: SchemaFieldGroup | SchemaFieldArray | null;
-	conditionalSchemas?: ConditionalSchema[];
 }
 
-export interface SchemaFieldArray {
-	label: string;
+export interface SchemaFieldArray extends BaseSchemaConfig {
 	arrayRef: FormArray;
-	key: string;
-	uniqueKey: string;
-	type: SchemaFieldType;
-	description?: string;
-	items: Array<SchemaFieldConfig | SchemaFieldGroup | SchemaFieldArray>; // holds added item configs
+	items: Array<SchemaFieldConfig | SchemaFieldGroup | SchemaFieldArray>;
 	itemSchema?: JsonSchema; // Schema template for array items
 	validations?: FieldArrayValidations;
 	canAddItem: () => boolean;
-	parent: SchemaFieldGroup | SchemaFieldArray;
-	conditionalSchemas?: ConditionalSchema[];
+	canRemoveItem: () => boolean;
 }
