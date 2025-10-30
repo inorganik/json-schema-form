@@ -5,7 +5,8 @@
 	"properties": {
 		"status": {
 			"title": "Status",
-			"enum": ["FLAG_CONTROLLED", "ENABLED", "DISABLED"]
+			"enum": ["FLAG_CONTROLLED", "ENABLED", "DISABLED"],
+			"format": "options-label"
 		},
 		"title": {
 			"title": "Title",

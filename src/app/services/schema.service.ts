@@ -222,7 +222,6 @@ export class SchemaService {
 
 		// Handle oneOf - create radio field with options
 		if (schema.oneOf) {
-			console.log('handle one of', schema);
 			this.handleOneOf(schema, parent, key);
 		}
 
@@ -347,16 +346,20 @@ export class SchemaService {
 
 		const baseKey = key || 'anyOf_' + Math.random().toString(36).substring(2);
 
-		// If we have a key, create a group for this property; otherwise use parent directly
+		// Determine target group based on whether we have a key
 		let targetGroup: SchemaFieldGroup;
+		let fieldsetGroup: SchemaFieldGroup | null = null;
+
 		if (key) {
+			// Create a wrapper group for UI purposes (fieldset)
 			const groupSchema: JsonSchema = {
 				type: 'object',
 				title: schema.title || baseKey,
 				properties: {},
 			};
 			this.addGroup(groupSchema, parent, key);
-			targetGroup = (parent as SchemaFieldGroup).fields[key] as SchemaFieldGroup;
+			fieldsetGroup = (parent as SchemaFieldGroup).fields[key] as SchemaFieldGroup;
+			targetGroup = parent as SchemaFieldGroup;
 		} else {
 			targetGroup = parent as SchemaFieldGroup;
 		}
@@ -370,13 +373,16 @@ export class SchemaService {
 			// Create a control for the checkbox (not added to FormGroup)
 			const conditionalControl = new FormControl(false);
 
+			// Parent is determined by if there is a key
+			const checkboxParent = fieldsetGroup || targetGroup;
+
 			const checkboxField: SchemaFieldConfig = {
 				label: anyOfSchema.title || `${baseKey} option ${i + 1}`,
 				controlRef: conditionalControl,
 				key: checkboxKey,
-				uniqueKey: `${targetGroup.uniqueKey}_${checkboxKey}`,
+				uniqueKey: `${checkboxParent.uniqueKey}_${checkboxKey}`,
 				type: SchemaFieldType.Checkbox,
-				parent: targetGroup,
+				parent: checkboxParent,
 				conditionalSchemas: [
 					{
 						triggerValue: true,
@@ -387,10 +393,10 @@ export class SchemaService {
 				],
 			};
 
-			// Add the field to the target group (but not to the FormGroup)
-			targetGroup.fields[checkboxKey] = checkboxField;
+			// Add the checkbox field to the fieldset group's fields
+			checkboxParent.fields[checkboxKey] = checkboxField;
 
-			// Set up valueChanges subscription for conditional logic
+			// Set up valueChanges subscription - add conditional fields to targetGroup (parent)
 			const subscription = conditionalControl.valueChanges.subscribe(value => {
 				this.handleConditionalSchemas(checkboxField, value, targetGroup);
 			});
@@ -418,22 +424,25 @@ export class SchemaService {
 
 		const baseKey = key || 'oneOf_' + Math.random().toString(36).substring(2);
 
-		// If we have a key, create a group for this property; otherwise use parent directly
+		// Determine target group based on whether we have a key
 		let targetGroup: SchemaFieldGroup;
+		let fieldsetGroup: SchemaFieldGroup | null = null;
+
 		if (key) {
+			// Create a wrapper group for UI purposes (fieldset)
 			const groupSchema: JsonSchema = {
 				type: 'object',
 				title: schema.title || baseKey,
 				properties: {},
 			};
 			this.addGroup(groupSchema, parent, key);
-			targetGroup = (parent as SchemaFieldGroup).fields[key] as SchemaFieldGroup;
+			fieldsetGroup = (parent as SchemaFieldGroup).fields[key] as SchemaFieldGroup;
+			targetGroup = parent as SchemaFieldGroup;
 		} else {
 			targetGroup = parent as SchemaFieldGroup;
 		}
 
 		// Create radio field for oneOf selection
-		// This control is NOT added to the FormGroup, so it won't appear in form value
 		const options = schema.oneOf!.map((oneOfSchema, i) => {
 			const titleFromProps = oneOfSchema.properties
 				? Object.values(oneOfSchema.properties)[0]?.title
@@ -449,14 +458,18 @@ export class SchemaService {
 		const conditionalControl = new FormControl(null);
 
 		const radioKey = `${baseKey}_oneOf_selector`;
+
+		// Parent is determined by if there is a key
+		const radioParent = fieldsetGroup || targetGroup;
+
 		const radioField: SchemaFieldConfig = {
-			label: '',
+			label: schema.title || '',
 			controlRef: conditionalControl,
 			key: radioKey,
-			uniqueKey: `${targetGroup.uniqueKey}_${radioKey}`,
+			uniqueKey: `${radioParent.uniqueKey}_${radioKey}`,
 			type: SchemaFieldType.Radio,
 			options,
-			parent: targetGroup,
+			parent: radioParent,
 			conditionalSchemas: schema.oneOf!.map((oneOfSchema, i) => ({
 				triggerValue: i,
 				schema: oneOfSchema,
@@ -464,8 +477,8 @@ export class SchemaService {
 			})),
 		};
 
-		// Add the field to the target group (but not to the FormGroup)
-		targetGroup.fields[radioKey] = radioField;
+		// Add the radio field to the fieldset group's fields
+		radioParent.fields[radioKey] = radioField;
 
 		// Set up valueChanges subscription for conditional logic
 		const subscription = conditionalControl.valueChanges.subscribe(value => {
