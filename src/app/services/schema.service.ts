@@ -222,6 +222,7 @@ export class SchemaService {
 
 		// Handle oneOf - create radio field with options
 		if (schema.oneOf) {
+			console.log('handle one of', schema);
 			this.handleOneOf(schema, parent, key);
 		}
 
@@ -344,7 +345,7 @@ export class SchemaService {
 			return;
 		}
 
-		const baseKey = key || 'anyOf';
+		const baseKey = key || 'anyOf_' + Math.random().toString(36).substring(2);
 
 		// If we have a key, create a group for this property; otherwise use parent directly
 		let targetGroup: SchemaFieldGroup;
@@ -415,7 +416,7 @@ export class SchemaService {
 			return;
 		}
 
-		const baseKey = key || 'oneOf';
+		const baseKey = key || 'oneOf_' + Math.random().toString(36).substring(2);
 
 		// If we have a key, create a group for this property; otherwise use parent directly
 		let targetGroup: SchemaFieldGroup;
