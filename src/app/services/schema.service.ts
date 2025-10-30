@@ -13,13 +13,116 @@ import { JsonSchema } from '../models/schema-models';
 	providedIn: 'root',
 })
 export class SchemaService {
+	// Root url of where schemas are fetched from
+	private schemaRootUrl = 'https://localhost:4200/assets/';
+
 	// A cache of all $defs in the schemas
 	public defsMap = new Map();
+
+	// for caching fetched schemas (not needed yet)
+	private schemaCache: Map<string, JsonSchema> = new Map();
 
 	// subscriptions for watching field values
 	private subscriptions = new Map<string, Subscription>();
 
-	constructor() {}
+	/**
+	 * Convenience method that consolidates service calls
+	 */
+	async getAndDereferenceSchema(filepath: string): Promise<JsonSchema> {
+		const schema = await this.getSchema(filepath);
+		return this.dereferenceSchema(schema!);
+	}
+
+	/**
+	 * Fetch a schema
+	 */
+	async getSchema(filepath: string): Promise<JsonSchema | null> {
+		if (this.schemaCache.has(filepath)) {
+			return this.schemaCache.get(filepath)!;
+		}
+		try {
+			const response = await fetch(filepath);
+			if (!response.ok) {
+				throw new Error(`HTTP error! status: ${response.status}`);
+			}
+			return response.json();
+		} catch (error) {
+			console.error('Failed to fetch widget schema:', error);
+			return null;
+		}
+	}
+
+	/**
+	 * Replaces $ref pointers in a schema with the objects they reference
+	 */
+	async dereferenceSchema(schema: JsonSchema): Promise<JsonSchema> {
+		// helper to collect $defs recursively
+		const collectDefs = (obj: any) => {
+			if (obj && typeof obj === 'object') {
+				if (obj.$defs && typeof obj.$defs === 'object') {
+					for (const key of Object.keys(obj.$defs)) {
+						const defObj = obj.$defs[key];
+						if (defObj && typeof defObj === 'object') {
+							const defKey = defObj['$id'] ? defObj['$id'] : key;
+							this.defsMap.set(defKey, defObj);
+						}
+					}
+				}
+				for (const value of Object.values(obj)) {
+					collectDefs(value);
+				}
+			} else if (Array.isArray(obj)) {
+				for (const item of obj) {
+					collectDefs(item);
+				}
+			}
+		};
+
+		// track visited objects to prevent infinite recursion
+		const visited = new Set<any>();
+
+		const dereference = async (obj: any): Promise<any> => {
+			if (visited.has(obj)) {
+				return obj;
+			}
+			visited.add(obj);
+			collectDefs(obj);
+
+			if (Array.isArray(obj)) {
+				const result = await Promise.all(obj.map(item => dereference(item)));
+				visited.delete(obj);
+				return result;
+			} else if (obj && typeof obj === 'object') {
+				if ('$ref' in obj && typeof obj['$ref'] === 'string') {
+					const refVal = obj['$ref'];
+					if (refVal.startsWith(this.schemaRootUrl)) {
+						// check defsMap for matching $id
+						if (this.defsMap.has(refVal)) {
+							return;
+						}
+						// if not found in defsMap, fetch from remote
+						const filename = refVal.slice(this.schemaRootUrl.length);
+						if (filename) {
+							const refSchema = await this.getSchema(filename);
+							return dereference(refSchema);
+						}
+					}
+				}
+				// traverse object properties
+				const entries = await Promise.all(
+					Object.entries(obj).map(async ([key, value]) => [
+						key,
+						await dereference(value),
+					]),
+				);
+				visited.delete(obj);
+				return Object.fromEntries(entries);
+			}
+			visited.delete(obj);
+			return obj;
+		};
+		return dereference(schema);
+	}
 
 	/**
 	 * Converts a schema to a field group config. Traverses the schema, adding
@@ -68,6 +171,8 @@ export class SchemaService {
 		let key = '';
 		if (ref.startsWith(defsPath)) {
 			key = ref.slice(defsPath.length);
+		} else {
+			key = ref;
 		}
 
 		if (this.defsMap.has(key)) {
@@ -344,7 +449,7 @@ export class SchemaService {
 
 		const radioKey = `${baseKey}_oneOf_selector`;
 		const radioField: SchemaFieldConfig = {
-			label: schema.title || baseKey,
+			label: '',
 			controlRef: conditionalControl,
 			key: radioKey,
 			uniqueKey: `${targetGroup.uniqueKey}_${radioKey}`,
@@ -404,8 +509,8 @@ export class SchemaService {
 			parentArray.arrayRef?.push(formGroup);
 		}
 
-		// Check if this object has no properties - if so, add a parameter field for dynamic property addition
-		if (!schema.properties || Object.keys(schema.properties).length === 0) {
+		// Conditionally add parameter field for schemas that only have type property
+		if (!schema.properties && !schema.oneOf && !schema.anyOf && !schema.allOf && !schema.if) {
 			this.addParameter(fieldGroup);
 		}
 
@@ -416,18 +521,17 @@ export class SchemaService {
 	/**
 	 * Adds a parameter field to a field group. This is used for object types that have no
 	 * defined properties, allowing users to dynamically add fields with custom keys.
-	 * The parameter field provides a text input for the key name and an "Add" button.
-	 * The control is NOT added to the parent group since it's only used for the key name.
 	 */
 	addParameter(parent: SchemaFieldGroup): void {
-		// Create a form control for the parameter key input (not added to parent group)
+		// form control for the parameter key input (not added to parent group)
 		const control = new FormControl('');
 
 		// Create the parameter field config
 		const parameterField: SchemaFieldConfig = {
 			label: 'Add parameter',
 			controlRef: control,
-			key: '_parameter',
+			description: 'Add custom parameters.',
+			key: '_add_parameter',
 			uniqueKey: `${parent.uniqueKey}_parameter`,
 			type: SchemaFieldType.Parameter,
 			parent,
@@ -442,7 +546,6 @@ export class SchemaService {
 	 * Removes a group from the parent FormGroup or FormArray and from parent fields/items
 	 */
 	removeGroup(key: string, parent: SchemaFieldGroup | SchemaFieldArray): void {
-		console.log('remove group', key);
 		if (parent.type === SchemaFieldType.Group) {
 			const parentGroup = parent as SchemaFieldGroup;
 			const fieldGroup = parentGroup.fields[key] as SchemaFieldGroup;
@@ -495,18 +598,29 @@ export class SchemaService {
 		if (schema.enum) {
 			// Use select for 5+ items, radio for 4 or less
 			fieldType = schema.enum.length >= 5 ? SchemaFieldType.Select : SchemaFieldType.Radio;
+			if (schema.format === 'radio') {
+				fieldType = SchemaFieldType.Radio;
+			} else if (schema.format === 'select') {
+				fieldType = SchemaFieldType.Select;
+			}
 		} else {
 			// Map schema type to field type
 			switch (schema.type) {
 				case 'boolean':
-					fieldType = SchemaFieldType.Checkbox;
+					fieldType =
+						schema.format === 'toggle'
+							? SchemaFieldType.Toggle
+							: SchemaFieldType.Checkbox;
 					break;
 				case 'number':
 				case 'integer':
 					fieldType = SchemaFieldType.Number;
 					break;
 				default:
-					fieldType = SchemaFieldType.Text;
+					fieldType =
+						schema.format === 'textarea'
+							? SchemaFieldType.Textarea
+							: SchemaFieldType.Text;
 			}
 		}
 
@@ -518,7 +632,7 @@ export class SchemaService {
 			uniqueKey: `${parent.uniqueKey}_${key}`,
 			type: fieldType,
 			description: schema.description,
-			options: schema.enum ? this.convertEnumToOptions(schema.enum) : undefined,
+			options: schema.enum ? this.convertEnumToOptions(schema) : undefined,
 			validations: Object.keys(validations).length > 0 ? validations : undefined,
 			parent,
 			removeable,
@@ -552,7 +666,6 @@ export class SchemaService {
 	 * the parent, and remove the field config from the parent field group or array.
 	 */
 	removeField(key: string, parent: SchemaFieldGroup): void {
-		console.log('remove field', key);
 		if (parent.type === SchemaFieldType.Group) {
 			const field = parent.fields[key] as SchemaFieldConfig;
 
@@ -647,7 +760,6 @@ export class SchemaService {
 	 * Removes the form array from the parent FormGroup or FormArray and from parent fields/items
 	 */
 	removeArray(key: string, parent: SchemaFieldGroup | SchemaFieldArray): void {
-		console.log('remove array', key);
 		if (parent.type === SchemaFieldType.Group) {
 			const parentGroup = parent as SchemaFieldGroup;
 			const fieldArray = parentGroup.fields[key] as SchemaFieldArray;
@@ -866,25 +978,8 @@ export class SchemaService {
 				? Object.keys((parent as SchemaFieldGroup).fields)
 				: [];
 
-		// If the schema has properties, filter out properties that already exist in the parent
-		// This prevents re-adding fields when processing conditional schemas
-		if (schema.properties && parent.type === SchemaFieldType.Group) {
-			const filteredSchema = { ...schema };
-			filteredSchema.properties = {};
-
-			for (const [key, propertySchema] of Object.entries(schema.properties)) {
-				// Only include properties that don't already exist in the parent
-				if (!keysBefore.includes(key)) {
-					filteredSchema.properties[key] = propertySchema;
-				}
-			}
-
-			// Process the filtered schema
-			this.processSchema(filteredSchema, parent);
-		} else {
-			// Process the schema normally (for arrays or schemas without properties)
-			this.processSchema(schema, parent);
-		}
+		// Process the schema, which will handle properties, anyOf, oneOf, if/then/else, etc.
+		this.processSchema(schema, parent);
 
 		// Track the keys after processing to determine what was added
 		if (parent.type === SchemaFieldType.Group) {
@@ -947,11 +1042,10 @@ export class SchemaService {
 
 	/**
 	 * Converts enum values to options array with label and value.
-	 * Converts snake-case values like 'FLAG_CONTROLLED' to "Flag Controlled"
 	 */
-	private convertEnumToOptions(enumValues: any[]): { label: string; value: any }[] {
-		return enumValues.map(value => ({
-			label: this.snakeCaseToLabel(value),
+	private convertEnumToOptions(schema: JsonSchema): { label: string; value: any }[] {
+		return schema.enum!.map(value => ({
+			label: schema.format === 'options-label' ? this.snakeCaseToLabel(value) : value,
 			value: value,
 		}));
 	}
@@ -965,11 +1059,6 @@ export class SchemaService {
 		if (typeof value !== 'string') {
 			return String(value);
 		}
-		if (value.length <= 4) {
-			// handle acronyms
-			return value.toUpperCase();
-		}
-
 		// Convert snake_case to Title Case
 		return value
 			.split('_')

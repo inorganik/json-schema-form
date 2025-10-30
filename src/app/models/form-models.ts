@@ -6,10 +6,12 @@ export enum SchemaFieldType {
 	Radio = 'radio',
 	Number = 'number',
 	Text = 'text',
+	Textarea = 'textarea',
 	Checkbox = 'checkbox',
 	Group = 'group',
 	Array = 'array',
 	Parameter = 'parameter',
+	Toggle = 'toggle',
 }
 
 export interface FieldValidations {
