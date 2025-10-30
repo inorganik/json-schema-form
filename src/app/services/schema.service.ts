@@ -510,8 +510,9 @@ export class SchemaService {
 			parentArray.arrayRef?.push(formGroup);
 		}
 
-		// Conditionally add parameter field for schemas that only have type property
-		if (!schema.properties && !schema.oneOf && !schema.anyOf && !schema.allOf && !schema.if) {
+		// Conditionally add parameter field for object schemas with no field props
+		const hasFieldProps = this.hasFieldProperties(schema);
+		if (!hasFieldProps) {
 			this.addParameter(fieldGroup);
 		}
 
@@ -993,6 +994,13 @@ export class SchemaService {
 		}
 
 		return addedKeys;
+	}
+
+	/**
+	 * Detects if a schema has props that should render fields
+	 */
+	hasFieldProperties(schema: JsonSchema): boolean {
+		return !!(schema.properties || schema.oneOf || schema.anyOf || schema.allOf || schema.if);
 	}
 
 	/**
