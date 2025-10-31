@@ -12,6 +12,7 @@ export enum SchemaFieldType {
 	Array = 'array',
 	Parameter = 'parameter',
 	Toggle = 'toggle',
+	Hidden = 'hidden',
 }
 
 export interface FieldValidations {

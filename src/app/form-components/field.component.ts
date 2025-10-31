@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
+import { ReactiveFormsModule } from '@angular/forms';
 import { SchemaFieldConfig, SchemaFieldType } from '../models/form-models';
 import { CheckboxFieldComponent } from './checkbox-field.component';
 import { ParameterFieldComponent } from './parameter.component';
@@ -15,6 +16,7 @@ import { TextInputFieldComponent } from './text-input-field.component';
 		TextInputFieldComponent,
 		SelectFieldComponent,
 		RadioFieldComponent,
+		ReactiveFormsModule,
 		ParameterFieldComponent,
 	],
 	template: `
@@ -36,6 +38,9 @@ import { TextInputFieldComponent } from './text-input-field.component';
 			}
 			@case (FieldType.Parameter) {
 				<app-parameter-field [config]="config" />
+			}
+			@case (FieldType.Hidden) {
+				<input type="hidden" [formControl]="config.controlRef" [name]="config.uniqueKey" />
 			}
 		}
 	`,

@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { FormArray, FormControl, FormGroup, Validators } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import {
+	ConditionalSchema,
 	SchemaFieldArray,
 	SchemaFieldConfig,
 	SchemaFieldGroup,
@@ -9,9 +10,10 @@ import {
 } from '../models/form-models';
 import { JsonSchema } from '../models/schema-models';
 
-@Injectable({
-	providedIn: 'root',
-})
+/**
+ * Service for rendering forms from json schemas
+ */
+@Injectable()
 export class SchemaService {
 	// Root url of where schemas are fetched from
 	private schemaRootUrl = 'https://localhost:4200/assets/';
@@ -28,9 +30,12 @@ export class SchemaService {
 	/**
 	 * Convenience method that consolidates service calls
 	 */
-	async getAndDereferenceSchema(filepath: string): Promise<JsonSchema> {
+	async getAndDereferenceSchema(filepath: string): Promise<JsonSchema | null> {
 		const schema = await this.getSchema(filepath);
-		return this.dereferenceSchema(schema!);
+		if (!schema) {
+			return null;
+		}
+		return this.dereferenceSchema(schema);
 	}
 
 	/**
@@ -125,8 +130,8 @@ export class SchemaService {
 	}
 
 	/**
-	 * Converts a schema to a field group config. Traverses the schema, adding
-	 * configs (FieldConfig, FieldGroup or FieldArray) for each item.
+	 * Entry point for converting a schema to a field group config. Traverses the
+	 * schema, adding configs (FieldConfig, FieldGroup or FieldArray) for each item.
 	 *
 	 * Returns the root FieldGroup representing the entire form
 	 */
@@ -134,8 +139,9 @@ export class SchemaService {
 		// set defs
 		if (schema.$defs) {
 			for (const [key, definition] of Object.entries(schema.$defs)) {
-				if (!this.defsMap.has(key)) {
-					this.defsMap.set(key, definition);
+				const defKey = schema.$defs[key].$id ? schema.$defs[key].$id : key;
+				if (!this.defsMap.has(defKey)) {
+					this.defsMap.set(defKey, definition);
 				}
 			}
 		}
@@ -179,6 +185,7 @@ export class SchemaService {
 			return this.defsMap.get(key);
 		} else {
 			console.warn(`Could not resolve $ref: ${ref}`);
+			console.log('defs map', this.defsMap);
 			return null;
 		}
 	}
@@ -347,7 +354,7 @@ export class SchemaService {
 		const baseKey = key || 'anyOf_' + Math.random().toString(36).substring(2);
 
 		// Determine target group based on whether we have a key
-		let targetGroup: SchemaFieldGroup;
+		let targetGroup: SchemaFieldGroup = parent as SchemaFieldGroup;
 		let fieldsetGroup: SchemaFieldGroup | null = null;
 
 		if (key) {
@@ -359,16 +366,15 @@ export class SchemaService {
 			};
 			this.addGroup(groupSchema, parent, key);
 			fieldsetGroup = (parent as SchemaFieldGroup).fields[key] as SchemaFieldGroup;
-			targetGroup = parent as SchemaFieldGroup;
-		} else {
-			targetGroup = parent as SchemaFieldGroup;
 		}
 
 		// Create checkbox fields for each anyOf option
-		// These controls are NOT added to the FormGroup, so they won't appear in form value
 		for (let i = 0; i < schema.anyOf!.length; i++) {
-			const anyOfSchema = schema.anyOf![i];
-			const checkboxKey = `${baseKey}_anyOf_${i + 1}`;
+			let anyOfSchema = schema.anyOf![i];
+			if (anyOfSchema.$ref) {
+				anyOfSchema = this.resolveRef(anyOfSchema.$ref);
+			}
+			const checkboxKey = `${baseKey}_option_${i + 1}`;
 
 			// Create a control for the checkbox (not added to FormGroup)
 			const conditionalControl = new FormControl(false);
@@ -398,7 +404,7 @@ export class SchemaService {
 
 			// Set up valueChanges subscription - add conditional fields to targetGroup (parent)
 			const subscription = conditionalControl.valueChanges.subscribe(value => {
-				this.handleConditionalSchemas(checkboxField, value, targetGroup);
+				this.handleConditionalSchemas(checkboxField, value, checkboxParent);
 			});
 			this.subscriptions.set(checkboxField.uniqueKey, subscription);
 		}
@@ -421,11 +427,10 @@ export class SchemaService {
 			console.warn('oneOf requires parent to be a FieldGroup', schema);
 			return;
 		}
-
 		const baseKey = key || 'oneOf_' + Math.random().toString(36).substring(2);
 
 		// Determine target group based on whether we have a key
-		let targetGroup: SchemaFieldGroup;
+		let targetGroup: SchemaFieldGroup = parent as SchemaFieldGroup;
 		let fieldsetGroup: SchemaFieldGroup | null = null;
 
 		if (key) {
@@ -438,12 +443,13 @@ export class SchemaService {
 			this.addGroup(groupSchema, parent, key);
 			fieldsetGroup = (parent as SchemaFieldGroup).fields[key] as SchemaFieldGroup;
 			targetGroup = parent as SchemaFieldGroup;
-		} else {
-			targetGroup = parent as SchemaFieldGroup;
 		}
 
 		// Create radio field for oneOf selection
 		const options = schema.oneOf!.map((oneOfSchema, i) => {
+			if (oneOfSchema.$ref) {
+				oneOfSchema = this.resolveRef(oneOfSchema.$ref);
+			}
 			const titleFromProps = oneOfSchema.properties
 				? Object.values(oneOfSchema.properties)[0]?.title
 				: undefined;
@@ -457,7 +463,7 @@ export class SchemaService {
 		// Create a control for the radio (not added to FormGroup)
 		const conditionalControl = new FormControl(null);
 
-		const radioKey = `${baseKey}_oneOf_selector`;
+		const radioKey = `${baseKey}_radio`;
 
 		// Parent is determined by if there is a key
 		const radioParent = fieldsetGroup || targetGroup;
@@ -470,11 +476,14 @@ export class SchemaService {
 			type: SchemaFieldType.Radio,
 			options,
 			parent: radioParent,
-			conditionalSchemas: schema.oneOf!.map((oneOfSchema, i) => ({
-				triggerValue: i,
-				schema: oneOfSchema,
-				addedKeys: [],
-			})),
+			conditionalSchemas: schema.oneOf!.map(
+				(oneOfSchema, i) =>
+					({
+						triggerValue: i,
+						schema: oneOfSchema.$ref ? this.resolveRef(oneOfSchema.$ref) : oneOfSchema,
+						addedKeys: [],
+					}) as ConditionalSchema,
+			),
 		};
 
 		// Add the radio field to the fieldset group's fields
@@ -482,7 +491,7 @@ export class SchemaService {
 
 		// Set up valueChanges subscription for conditional logic
 		const subscription = conditionalControl.valueChanges.subscribe(value => {
-			this.handleConditionalSchemas(radioField, value, targetGroup);
+			this.handleConditionalSchemas(radioField, value, radioParent);
 		});
 		this.subscriptions.set(radioField.uniqueKey, subscription);
 	}
@@ -605,7 +614,8 @@ export class SchemaService {
 		const { validators, validations } = this.buildValidators(schema, parent);
 
 		// Create form control with default value and validators
-		const defaultValue = schema.default !== undefined ? schema.default : null;
+		const defaultValue =
+			schema.default !== undefined ? schema.default : schema.const ? schema.const : null;
 		const control = new FormControl(defaultValue, validators);
 
 		// Determine field type
@@ -618,6 +628,8 @@ export class SchemaService {
 			} else if (schema.format === 'select') {
 				fieldType = SchemaFieldType.Select;
 			}
+		} else if (schema.const) {
+			fieldType = SchemaFieldType.Hidden;
 		} else {
 			// Map schema type to field type
 			switch (schema.type) {
@@ -860,7 +872,7 @@ export class SchemaService {
 
 	/**
 	 * Handles conditional schema logic for a field based on its current value.
-	 * Called by valueChanges subscriptions set up in addField.
+	 * Called by valueChanges subscriptions.
 	 *
 	 * For each ConditionalSchema in the field's conditionalSchemas array:
 	 * - If the field value matches triggerValue, add the schema's properties/fields to the parent
@@ -881,6 +893,13 @@ export class SchemaService {
 		if (!field.conditionalSchemas || field.conditionalSchemas.length === 0) {
 			return;
 		}
+		// Sort conditional schemas so removal comes first, so that if we are adding a separate
+		// schema with the same keys, they will get added.
+		field.conditionalSchemas.sort((a, b) => {
+			const shouldAddA = a.triggerValue !== undefined && currentValue === a.triggerValue;
+			const shouldAddB = b.triggerValue !== undefined && currentValue === b.triggerValue;
+			return !shouldAddA && shouldAddB ? -1 : shouldAddA && !shouldAddB ? 1 : 0;
+		});
 
 		for (const conditionalSchema of field.conditionalSchemas) {
 			const shouldAdd =
@@ -889,7 +908,6 @@ export class SchemaService {
 			const shouldRemove =
 				conditionalSchema.removeTriggerValue !== undefined &&
 				currentValue === conditionalSchema.removeTriggerValue;
-
 			// Remove previously added keys if they exist and we should remove or value doesn't match
 			if (conditionalSchema.addedKeys && conditionalSchema.addedKeys.length > 0) {
 				if (shouldRemove || !shouldAdd) {

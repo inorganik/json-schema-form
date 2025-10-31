@@ -7,6 +7,7 @@ import { SchemaService } from '../services/schema.service';
 @Component({
 	selector: 'app-if-then-else-test',
 	imports: [FieldContainerComponent],
+	providers: [SchemaService],
 	template: `
 		<app-field-container [config]="groupConfig" />
 		<button type="button" (click)="handleFormSubmit()">Submit</button>
