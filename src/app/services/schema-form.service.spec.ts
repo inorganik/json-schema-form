@@ -6,7 +6,9 @@ describe('SchemaFormService', () => {
 	let service: SchemaFormService;
 
 	beforeEach(() => {
-		TestBed.configureTestingModule({});
+		TestBed.configureTestingModule({
+			providers: [SchemaFormService],
+		});
 		service = TestBed.inject(SchemaFormService);
 	});
 
