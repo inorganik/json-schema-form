@@ -1,7 +1,7 @@
 import { Component, inject, Input } from '@angular/core';
 import { ReactiveFormsModule } from '@angular/forms';
 import { SchemaFieldConfig, SchemaFieldGroup } from '../models/form-models';
-import { SchemaService } from '../services/schema.service';
+import { SchemaFormService } from '../services/schema-form.service';
 
 @Component({
 	selector: 'app-text-input-field',
@@ -81,11 +81,7 @@ import { SchemaService } from '../services/schema.service';
 export class TextInputFieldComponent {
 	@Input() config: SchemaFieldConfig;
 
-	schemaService = inject(SchemaService);
-
-	ngOnInit() {
-		// console.log('text-input', this.config);
-	}
+	schemaService = inject(SchemaFormService);
 
 	remove() {
 		this.schemaService.removeField(this.config.key, this.config.parent as SchemaFieldGroup);

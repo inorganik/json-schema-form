@@ -3,7 +3,7 @@ import { Component, inject, Input } from '@angular/core';
 import { ReactiveFormsModule } from '@angular/forms';
 import { SchemaFieldConfig, SchemaFieldGroup } from '../models/form-models';
 import { JsonSchema } from '../models/schema-models';
-import { SchemaService } from '../services/schema.service';
+import { SchemaFormService } from '../services/schema-form.service';
 
 @Component({
 	selector: 'app-parameter-field',
@@ -70,7 +70,7 @@ import { SchemaService } from '../services/schema.service';
 export class ParameterFieldComponent {
 	@Input() config: SchemaFieldConfig;
 
-	schemaService = inject(SchemaService);
+	schemaService = inject(SchemaFormService);
 
 	addParameter() {
 		const key = this.config.controlRef.value;

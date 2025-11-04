@@ -16,39 +16,43 @@ import { JsonSchema } from '../models/schema-models';
  * Service for rendering forms from json schemas
  */
 @Injectable()
-export class SchemaService {
-	// Root url of where schemas are fetched from
-	private schemaRootUrl = 'https://localhost:4200/assets/';
+export class SchemaFormService {
+	// Root url of where schemas are fetched to help service distinguish between ids and urls
+	private schemasRootUrl: string;
 
 	// A cache of all $defs in the schemas
 	public defsMap = new Map();
 
-	// for caching fetched schemas (not needed yet)
+	// for caching fetched schemas
 	private schemaCache: Map<string, JsonSchema> = new Map();
 
 	// subscriptions for watching field values
 	private subscriptions = new Map<string, Subscription>();
 
-	// Toggle showing unique keys
+	// Toggle showing field config unique keys on page
 	private debug = false;
 
 	/**
 	 * Convenience method that consolidates service calls
+	 *
+	 * @param url - url of schema
 	 */
-	async getAndDereferenceSchema(filepath: string): Promise<JsonSchema> {
-		const schema = await this.getSchema(filepath);
+	async getAndDereferenceSchema(url: string): Promise<JsonSchema> {
+		const urlObj = new URL(url);
+		this.schemasRootUrl = urlObj.origin + '/';
+		const schema = await this.getSchema(url);
 		return this.dereferenceSchema(schema);
 	}
 
 	/**
-	 * Fetch a schema
+	 * Fetch a schema. Will detect if url is an asset url
 	 */
-	async getSchema(filepath: string): Promise<JsonSchema | null> {
-		if (this.schemaCache.has(filepath)) {
-			return this.schemaCache.get(filepath)!;
+	async getSchema(url: string): Promise<JsonSchema | null> {
+		if (this.schemaCache.has(url)) {
+			return this.schemaCache.get(url)!;
 		}
 		try {
-			const response = await fetch(filepath);
+			const response = await fetch(url);
 			if (!response.ok) {
 				throw new Error(`HTTP error! status: ${response.status}`);
 			}
@@ -60,7 +64,8 @@ export class SchemaService {
 	}
 
 	/**
-	 * Replaces $ref pointers in a schema with the objects they reference
+	 * Replaces $ref pointers in a schema with the objects they reference,
+	 * fetching any referenced schemas as necessary
 	 */
 	async dereferenceSchema(schema: JsonSchema): Promise<JsonSchema> {
 		// helper to collect $defs recursively
@@ -102,17 +107,14 @@ export class SchemaService {
 			} else if (obj && typeof obj === 'object') {
 				if ('$ref' in obj && typeof obj['$ref'] === 'string') {
 					const refVal = obj['$ref'];
-					if (refVal.startsWith(this.schemaRootUrl)) {
+					if (refVal.startsWith(this.schemasRootUrl)) {
 						// check defsMap for matching $id
 						if (this.defsMap.has(refVal)) {
 							return;
 						}
 						// if not found in defsMap, fetch from remote
-						const filename = refVal.slice(this.schemaRootUrl.length);
-						if (filename) {
-							const refSchema = await this.getSchema(filename);
-							return dereference(refSchema);
-						}
+						const refSchema = await this.getSchema(refVal);
+						return dereference(refSchema);
 					}
 				}
 				// traverse object properties
@@ -135,7 +137,8 @@ export class SchemaService {
 	 * Entry point for converting a schema to a field group config. Traverses the
 	 * schema, adding configs (FieldConfig, FieldGroup or FieldArray) for each item.
 	 *
-	 * Returns the root FieldGroup representing the entire form
+	 * @param schema - json schema to convert
+	 * @returns {SchemaFieldGroup} form config
 	 */
 	schemaToFieldConfig(schema: JsonSchema): SchemaFieldGroup {
 		// set defs
@@ -196,8 +199,6 @@ export class SchemaService {
 
 	/**
 	 * Processes a schema to handle oneOf, anyOf, and if/then/else conditional logic.
-	 * This method is called from schemaToFieldConfig, addGroup, and addArray to handle
-	 * nested conditional schemas at any level.
 	 *
 	 * Handles root-level schema keywords:
 	 * - allOf: merges all schemas at the same level
@@ -367,7 +368,7 @@ export class SchemaService {
 			// Create a wrapper group for UI purposes (fieldset)
 			const groupSchema: JsonSchema = {
 				type: 'object',
-				title: schema.title || baseKey,
+				title: schema.title || this.snakeCaseToLabel(key),
 				properties: {},
 			};
 			this.addGroup(groupSchema, parent, key);
@@ -444,7 +445,7 @@ export class SchemaService {
 			// Create a wrapper group for UI purposes (fieldset)
 			const groupSchema: JsonSchema = {
 				type: 'object',
-				title: schema.title || baseKey,
+				title: schema.title || this.snakeCaseToLabel(key),
 				properties: {},
 			};
 			this.addGroup(groupSchema, parent, key);
@@ -587,6 +588,7 @@ export class SchemaService {
 			type: SchemaFieldType.Parameter,
 			parent,
 			conditionalSchemas: [],
+			debug: this.debug,
 		};
 
 		// Add to parent fields (but not to the FormGroup)

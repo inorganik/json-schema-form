@@ -6,7 +6,7 @@ import {
 	SchemaFieldGroup,
 	SchemaFieldType,
 } from '../models/form-models';
-import { SchemaService } from '../services/schema.service';
+import { SchemaFormService } from '../services/schema-form.service';
 import { FieldComponent } from './field.component';
 
 @Component({
@@ -120,10 +120,6 @@ import { FieldComponent } from './field.component';
 	`,
 	styles: [
 		`
-			.field-group {
-				margin-bottom: 1rem;
-			}
-
 			fieldset small {
 				display: block;
 				margin-top: -0.5rem;
@@ -152,6 +148,11 @@ import { FieldComponent } from './field.component';
 				gap: 0.5rem;
 				margin-bottom: 0.5rem;
 				align-items: flex-start;
+			}
+
+			.array-item + .array-item {
+				border-top: 1px #ccc solid;
+				padding-top: 1rem;
 			}
 
 			.item-number {
@@ -198,7 +199,7 @@ export class FieldContainerComponent {
 	// Expose FieldType enum to template
 	FieldType = SchemaFieldType;
 
-	schemaService = inject(SchemaService);
+	schemaService = inject(SchemaFormService);
 
 	ngOnInit() {
 		// console.log('field-container', this.config);
