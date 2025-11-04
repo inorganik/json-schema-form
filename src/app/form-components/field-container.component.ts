@@ -15,37 +15,57 @@ import { FieldComponent } from './field.component';
 	template: `
 		@if (isGroup(config)) {
 			<!-- Field Group -->
+			@if (config.debug) {
+				<code>group: {{ config.uniqueKey }}</code>
+			}
 			<div class="field-group">
-				<fieldset>
-					@if (config.label) {
-						<legend>{{ config.label }}</legend>
-					}
-					@if (config.description) {
-						<small>{{ config.description }}</small>
-					}
+				@if (config.renderFieldset) {
+					<fieldset>
+						@if (config.label) {
+							<legend>{{ config.label }}</legend>
+						}
+						@if (config.description) {
+							<small>{{ config.description }}</small>
+						}
+						<div class="group-fields">
+							@for (field of getGroupEntries(config); track field.key) {
+								@switch (field.type) {
+									@case (FieldType.Group) {
+										<app-field-container [config]="asGroupOrArray(field)" />
+									}
+									@case (FieldType.Array) {
+										<app-field-container [config]="asGroupOrArray(field)" />
+									}
+									@default {
+										<app-field [config]="asField(field)" />
+									}
+								}
+							}
+						</div>
+					</fieldset>
+				} @else {
 					<div class="group-fields">
 						@for (field of getGroupEntries(config); track field.key) {
-							@switch (field.fieldConfig.type) {
+							@switch (field.type) {
 								@case (FieldType.Group) {
-									<app-field-container
-										[config]="asGroupOrArray(field.fieldConfig)"
-									/>
+									<app-field-container [config]="asGroupOrArray(field)" />
 								}
 								@case (FieldType.Array) {
-									<app-field-container
-										[config]="asGroupOrArray(field.fieldConfig)"
-									/>
+									<app-field-container [config]="asGroupOrArray(field)" />
 								}
 								@default {
-									<app-field [config]="asField(field.fieldConfig)" />
+									<app-field [config]="asField(field)" />
 								}
 							}
 						}
 					</div>
-				</fieldset>
+				}
 			</div>
 		} @else if (isArray(config)) {
 			<!-- Field Array -->
+			@if (config.debug) {
+				<code>array: {{ config.uniqueKey }}</code>
+			}
 			<div class="field-array">
 				<fieldset>
 					@if (config.label) {
@@ -177,10 +197,9 @@ export class FieldContainerComponent {
 
 	getGroupEntries(config: SchemaFieldGroup | SchemaFieldArray) {
 		if (this.isGroup(config)) {
-			return Object.entries(config.fields).map(([key, value]) => ({
-				key,
-				fieldConfig: value,
-			}));
+			return Object.values(config.fields).sort((a, b) =>
+				a.uniqueKey.localeCompare(b.uniqueKey),
+			);
 		}
 		return [];
 	}

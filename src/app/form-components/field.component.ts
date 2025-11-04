@@ -3,6 +3,7 @@ import { Component, Input } from '@angular/core';
 import { ReactiveFormsModule } from '@angular/forms';
 import { SchemaFieldConfig, SchemaFieldType } from '../models/form-models';
 import { CheckboxFieldComponent } from './checkbox-field.component';
+import { FormErrorComponent } from './field-errors.component';
 import { ParameterFieldComponent } from './parameter.component';
 import { RadioFieldComponent } from './radio-field.component';
 import { SelectFieldComponent } from './select-field.component';
@@ -18,8 +19,12 @@ import { TextInputFieldComponent } from './text-input-field.component';
 		RadioFieldComponent,
 		ReactiveFormsModule,
 		ParameterFieldComponent,
+		FormErrorComponent,
 	],
 	template: `
+		@if (config.debug) {
+			<code>field: {{ config.uniqueKey }}</code>
+		}
 		@switch (config.type) {
 			@case (FieldType.Select) {
 				<app-select-field [config]="config" />
@@ -43,6 +48,7 @@ import { TextInputFieldComponent } from './text-input-field.component';
 				<input type="hidden" [formControl]="config.controlRef" [name]="config.uniqueKey" />
 			}
 		}
+		<app-form-error [controlRef]="config.controlRef" />
 	`,
 	styles: [],
 })

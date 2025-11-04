@@ -1,6 +1,8 @@
 import { Injectable } from '@angular/core';
 import { FormArray, FormControl, FormGroup, Validators } from '@angular/forms';
+
 import { Subscription } from 'rxjs';
+
 import {
 	ConditionalSchema,
 	SchemaFieldArray,
@@ -27,14 +29,14 @@ export class SchemaService {
 	// subscriptions for watching field values
 	private subscriptions = new Map<string, Subscription>();
 
+	// Toggle showing unique keys
+	private debug = false;
+
 	/**
 	 * Convenience method that consolidates service calls
 	 */
-	async getAndDereferenceSchema(filepath: string): Promise<JsonSchema | null> {
+	async getAndDereferenceSchema(filepath: string): Promise<JsonSchema> {
 		const schema = await this.getSchema(filepath);
-		if (!schema) {
-			return null;
-		}
 		return this.dereferenceSchema(schema);
 	}
 
@@ -156,6 +158,8 @@ export class SchemaService {
 			fields: {},
 			parent: null,
 			conditionalSchemas: [],
+			debug: this.debug,
+			renderFieldset: false,
 		};
 
 		// Add required validation if present
@@ -244,7 +248,9 @@ export class SchemaService {
 
 		// Process regular properties FIRST (before allOf and if/then/else)
 		if (schema.properties) {
-			for (const [propKey, propertySchema] of Object.entries(schema.properties)) {
+			const propertyEntries = Object.entries(schema.properties);
+			for (let i = 0; i < propertyEntries.length; i++) {
+				const [propKey, propertySchema] = propertyEntries[i];
 				// Handle $ref in property schema
 				let actualSchema = propertySchema;
 				if (propertySchema.$ref) {
@@ -261,11 +267,11 @@ export class SchemaService {
 				}
 
 				if (actualSchema.type === 'object') {
-					this.addGroup(actualSchema, parent, propKey);
+					this.addGroup(actualSchema, parent, propKey, i);
 				} else if (actualSchema.type === 'array') {
-					this.addArray(actualSchema, parent, propKey);
+					this.addArray(actualSchema, parent, propKey, i);
 				} else {
-					this.addField(actualSchema, parent, propKey);
+					this.addField(actualSchema, parent, propKey, i);
 				}
 			}
 		}
@@ -351,7 +357,7 @@ export class SchemaService {
 			return;
 		}
 
-		const baseKey = key || 'anyOf_' + Math.random().toString(36).substring(2);
+		const baseKey = key || Math.random().toString(36).substring(2);
 
 		// Determine target group based on whether we have a key
 		let targetGroup: SchemaFieldGroup = parent as SchemaFieldGroup;
@@ -397,12 +403,13 @@ export class SchemaService {
 						addedKeys: [],
 					},
 				],
+				debug: this.debug,
 			};
 
 			// Add the checkbox field to the fieldset group's fields
 			checkboxParent.fields[checkboxKey] = checkboxField;
 
-			// Set up valueChanges subscription - add conditional fields to targetGroup (parent)
+			// Set up valueChanges subscription - add conditional fields to parent
 			const subscription = conditionalControl.valueChanges.subscribe(value => {
 				this.handleConditionalSchemas(checkboxField, value, checkboxParent);
 			});
@@ -427,7 +434,7 @@ export class SchemaService {
 			console.warn('oneOf requires parent to be a FieldGroup', schema);
 			return;
 		}
-		const baseKey = key || 'oneOf_' + Math.random().toString(36).substring(2);
+		const baseKey = key || Math.random().toString(36).substring(2);
 
 		// Determine target group based on whether we have a key
 		let targetGroup: SchemaFieldGroup = parent as SchemaFieldGroup;
@@ -463,7 +470,7 @@ export class SchemaService {
 		// Create a control for the radio (not added to FormGroup)
 		const conditionalControl = new FormControl(null);
 
-		const radioKey = `${baseKey}_radio`;
+		const radioKey = `${baseKey}_oneOf`;
 
 		// Parent is determined by if there is a key
 		const radioParent = fieldsetGroup || targetGroup;
@@ -484,6 +491,7 @@ export class SchemaService {
 						addedKeys: [],
 					}) as ConditionalSchema,
 			),
+			debug: this.debug,
 		};
 
 		// Add the radio field to the fieldset group's fields
@@ -500,20 +508,39 @@ export class SchemaService {
 	 * Creates a new FormGroup for the groupRef property in FieldGroup, and assigns
 	 * properties of the FieldGroup based on the schema
 	 */
-	addGroup(schema: JsonSchema, parent: SchemaFieldGroup | SchemaFieldArray, key: string): void {
+	addGroup(
+		schema: JsonSchema,
+		parent: SchemaFieldGroup | SchemaFieldArray,
+		key: string,
+		index?: number,
+	): void {
+		// console.log('add group', schema, parent, key);
 		// Create a new FormGroup
 		const formGroup = new FormGroup({});
 
+		// Create unique key with index prefix if provided
+		let uniqueKey = parent.uniqueKey;
+		if (index !== undefined) uniqueKey += '_' + `00${index}`.slice(-3);
+		uniqueKey += '_' + key;
+
+		let title = schema.title || this.snakeCaseToLabel(key);
+		if (parent.type === SchemaFieldType.Array) {
+			title = schema.title || 'Item';
+			title = title += ' ' + (index + 1);
+		}
+
 		// Create the FieldGroup config
 		const fieldGroup: SchemaFieldGroup = {
-			label: schema.title || this.snakeCaseToLabel(key),
+			label: title,
 			groupRef: formGroup,
 			key,
-			uniqueKey: `${parent.uniqueKey}_${key}`,
+			uniqueKey,
 			type: SchemaFieldType.Group,
 			fields: {},
 			parent,
 			conditionalSchemas: [],
+			debug: this.debug,
+			renderFieldset: true, // parent.type !== SchemaFieldType.Array
 		};
 
 		// Add required validation if present
@@ -554,9 +581,9 @@ export class SchemaService {
 		const parameterField: SchemaFieldConfig = {
 			label: 'Add parameter',
 			controlRef: control,
-			description: 'Add custom parameters.',
+			description: 'Enter a key to add a custom parameter.',
 			key: '_add_parameter',
-			uniqueKey: `${parent.uniqueKey}_parameter`,
+			uniqueKey: `${parent.uniqueKey}_000_addParam`,
 			type: SchemaFieldType.Parameter,
 			parent,
 			conditionalSchemas: [],
@@ -608,6 +635,7 @@ export class SchemaService {
 		schema: JsonSchema,
 		parent: SchemaFieldGroup | SchemaFieldArray,
 		key: string,
+		index?: number,
 		removeable = false,
 	): void {
 		// Build validators using helper method
@@ -651,12 +679,25 @@ export class SchemaService {
 			}
 		}
 
+		// Create unique key with index prefix if provided
+		let uniqueKey = parent.uniqueKey;
+		if (parent.type !== SchemaFieldType.Array) {
+			if (index !== undefined) uniqueKey += '_' + `00${index}`.slice(-3);
+		}
+		uniqueKey += '_' + key;
+
+		let title = schema.title || key;
+		if (parent.type === SchemaFieldType.Array) {
+			title = schema.title || 'Item';
+			title = title += ' ' + (index + 1);
+		}
+
 		// Create field config
 		const fieldConfig: SchemaFieldConfig = {
-			label: schema.title || key,
+			label: title,
 			controlRef: control,
 			key,
-			uniqueKey: `${parent.uniqueKey}_${key}`,
+			uniqueKey,
 			type: fieldType,
 			description: schema.description,
 			options: schema.enum ? this.convertEnumToOptions(schema) : undefined,
@@ -664,6 +705,13 @@ export class SchemaService {
 			parent,
 			removeable,
 			conditionalSchemas: [],
+			debug: this.debug,
+			rule:
+				schema.format === 'rule-above'
+					? 'above'
+					: schema.format === 'rule-below'
+						? 'below'
+						: null,
 		};
 
 		// Set up valueChanges subscription for conditional schemas
@@ -715,9 +763,21 @@ export class SchemaService {
 	/**
 	 * New-up a FormArray, and assigns FieldArray properties based on the schema
 	 */
-	addArray(schema: JsonSchema, parent: SchemaFieldGroup | SchemaFieldArray, key: string): void {
+	addArray(
+		schema: JsonSchema,
+		parent: SchemaFieldGroup | SchemaFieldArray,
+		key: string,
+		index?: number,
+	): void {
 		// Create a new FormArray
 		const formArray = new FormArray<any>([]);
+
+		// Create unique key with index prefix if provided
+		let uniqueKey = parent.uniqueKey;
+		if (parent.type !== SchemaFieldType.Array) {
+			if (index !== undefined) uniqueKey += '_' + `00${index}`.slice(-3);
+			uniqueKey += '_' + key;
+		}
 
 		// Build validations
 		const validations: any = {};
@@ -736,7 +796,7 @@ export class SchemaService {
 			label: schema.title || this.snakeCaseToLabel(key),
 			arrayRef: formArray,
 			key,
-			uniqueKey: `${parent.uniqueKey}_${key}`,
+			uniqueKey,
 			type: SchemaFieldType.Array,
 			description: schema.description,
 			items: [],
@@ -756,6 +816,7 @@ export class SchemaService {
 			},
 			parent,
 			conditionalSchemas: [],
+			debug: this.debug,
 		};
 
 		// Add to parent
@@ -829,15 +890,16 @@ export class SchemaService {
 		}
 
 		// Generate a unique key for this array item
-		const itemKey = `${fieldArray.key}_${fieldArray.items.length + 1}`;
+		const itemIndex = fieldArray.items.length;
+		const itemKey = `${fieldArray.key}_${itemIndex + 1}`;
 
 		// Determine what type of item to add based on schema type
 		if (fieldArray.itemSchema.type === 'object') {
-			this.addGroup(fieldArray.itemSchema, fieldArray, itemKey);
+			this.addGroup(fieldArray.itemSchema, fieldArray, itemKey, itemIndex);
 		} else if (fieldArray.itemSchema.type === 'array') {
-			this.addArray(fieldArray.itemSchema, fieldArray, itemKey);
+			this.addArray(fieldArray.itemSchema, fieldArray, itemKey, itemIndex);
 		} else {
-			this.addField(fieldArray.itemSchema, fieldArray, itemKey);
+			this.addField(fieldArray.itemSchema, fieldArray, itemKey, itemIndex);
 		}
 	}
 
@@ -937,7 +999,11 @@ export class SchemaService {
 				shouldAdd &&
 				(!conditionalSchema.addedKeys || conditionalSchema.addedKeys.length === 0)
 			) {
-				const addedKeys = this.processProperties(conditionalSchema.schema, parent);
+				const conditionalParent = { ...parent, uniqueKey: field.uniqueKey };
+				const addedKeys = this.processProperties(
+					conditionalSchema.schema,
+					conditionalParent,
+				);
 				conditionalSchema.addedKeys = addedKeys;
 			}
 		}
@@ -1084,7 +1150,7 @@ export class SchemaService {
 	 * Converts enum values to options array with label and value.
 	 */
 	private convertEnumToOptions(schema: JsonSchema): { label: string; value: any }[] {
-		return schema.enum!.map(value => ({
+		return schema.enum.map(value => ({
 			label: schema.format === 'options-label' ? this.snakeCaseToLabel(value) : value,
 			value: value,
 		}));

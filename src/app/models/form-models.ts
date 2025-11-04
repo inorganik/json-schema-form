@@ -53,6 +53,8 @@ export interface BaseSchemaConfig {
 	type: SchemaFieldType;
 	conditionalSchemas?: ConditionalSchema[];
 	parent: SchemaFieldGroup | SchemaFieldArray | null;
+	rule?: string;
+	debug?: boolean;
 }
 
 export interface SchemaFieldConfig extends BaseSchemaConfig {
@@ -66,6 +68,7 @@ export interface SchemaFieldGroup extends BaseSchemaConfig {
 	groupRef: FormGroup;
 	fields: { [key: string]: SchemaFieldConfig | SchemaFieldGroup | SchemaFieldArray };
 	validations?: FieldValidations;
+	renderFieldset?: boolean;
 }
 
 export interface SchemaFieldArray extends BaseSchemaConfig {
