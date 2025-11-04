@@ -540,7 +540,7 @@ export class SchemaService {
 			parent,
 			conditionalSchemas: [],
 			debug: this.debug,
-			renderFieldset: true, // parent.type !== SchemaFieldType.Array
+			renderFieldset: parent.type !== SchemaFieldType.Array,
 		};
 
 		// Add required validation if present

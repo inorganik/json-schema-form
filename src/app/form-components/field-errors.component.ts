@@ -46,7 +46,14 @@ import { FormControl, ReactiveFormsModule } from '@angular/forms';
 			}
 		}
 	`,
-	styles: [],
+	styles: [
+		`
+			.error-item {
+				color: red;
+				font-size: 0.8rem;
+			}
+		`,
+	],
 })
 export class FormErrorComponent {
 	@Input() controlRef: FormControl;

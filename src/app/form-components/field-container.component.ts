@@ -77,24 +77,43 @@ import { FieldComponent } from './field.component';
 					<div class="array-items">
 						@for (item of getArrayItems(config); track $index) {
 							<div class="array-item">
-								@switch (item.type) {
-									@case (FieldType.Group) {
-										<app-field-container [config]="asGroupOrArray(item)" />
-									}
-									@case (FieldType.Array) {
-										<app-field-container [config]="asGroupOrArray(item)" />
-									}
-									@default {
-										<app-field [config]="asField(item)" />
-									}
+								@if (item.type === FieldType.Group) {
+									<div class="item-number">{{ $index + 1 }}</div>
 								}
-								<button type="button" (click)="remove($index)" class="remove-btn">
-									Remove
+								<div class="item-content">
+									@switch (item.type) {
+										@case (FieldType.Group) {
+											<app-field-container [config]="asGroupOrArray(item)" />
+										}
+										@case (FieldType.Array) {
+											<app-field-container [config]="asGroupOrArray(item)" />
+										}
+										@default {
+											<app-field [config]="asField(item)" />
+										}
+									}
+								</div>
+								<button
+									type="button"
+									(click)="remove($index)"
+									title="Remove"
+									[disabled]="!config.canRemoveItem()"
+									class="add-remove-btn"
+								>
+									&minus;
 								</button>
 							</div>
 						}
 					</div>
-					<button type="button" (click)="add()" class="add-btn">Add</button>
+					<button
+						type="button"
+						(click)="add()"
+						title="Add"
+						[disabled]="!config.canAddItem()"
+						class="add-remove-btn"
+					>
+						+
+					</button>
 				</fieldset>
 			</div>
 		}
@@ -135,25 +154,40 @@ import { FieldComponent } from './field.component';
 				align-items: flex-start;
 			}
 
-			.array-item > *:first-child {
-				flex: 1;
-			}
-
-			.remove-btn {
-				background: #dc3545;
-				color: white;
-				border: none;
-				padding: 0.5rem;
-				cursor: pointer;
+			.item-number {
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				min-width: 2rem;
+				height: 2rem;
+				background: #e9ecef;
+				border-radius: 50%;
+				font-weight: bold;
 				flex-shrink: 0;
 			}
 
-			.add-btn {
-				background: #28a745;
-				color: white;
-				border: none;
-				padding: 0.5rem 1rem;
+			.item-content {
+				flex: 1;
+			}
+
+			.add-remove-btn {
+				background: #fff;
+				border: 1px #666 solid;
+				width: 2rem;
+				height: 2rem;
+				border-radius: 50%;
+				font-size: 1.5rem;
+				line-height: 1;
+				text-align: center;
+				padding: 0;
 				cursor: pointer;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+
+				&[disabled] {
+					border: 1px #ccc solid;
+				}
 			}
 		`,
 	],
