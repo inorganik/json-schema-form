@@ -14,6 +14,11 @@ import { SchemaService } from '../services/schema.service';
 				{{ config.label }}
 			</label>
 			<input type="text" [formControl]="config.controlRef" class="text-input" />
+			@if (config.description) {
+				<small class="description">
+					{{ config.description }}
+				</small>
+			}
 			<button type="button" (click)="addParameter()">Add</button>
 		</div>
 	`,
@@ -75,7 +80,14 @@ export class ParameterFieldComponent {
 		const schema: JsonSchema = {
 			type: 'string',
 		};
-		this.schemaService.addField(schema, this.config.parent as SchemaFieldGroup, key, true);
+		// Pass undefined for index (no specific order for dynamic fields) and true for removeable
+		this.schemaService.addField(
+			schema,
+			this.config.parent as SchemaFieldGroup,
+			key,
+			undefined,
+			true,
+		);
 
 		this.config.controlRef.setValue('');
 	}

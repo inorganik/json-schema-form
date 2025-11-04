@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, inject, Input } from '@angular/core';
 import { ReactiveFormsModule } from '@angular/forms';
 import { SchemaFieldConfig, SchemaFieldGroup } from '../models/form-models';
@@ -6,25 +5,21 @@ import { SchemaService } from '../services/schema.service';
 
 @Component({
 	selector: 'app-text-input-field',
-	imports: [CommonModule, ReactiveFormsModule],
+	imports: [ReactiveFormsModule],
 	template: `
 		<div class="form-field">
 			<label class="field-label">
 				{{ config.label }}
-				<span *ngIf="config.validations?.required" class="required">*</span>
+				@if (config.validations?.required) {
+					<span class="required">*</span>
+				}
 			</label>
 			<input [type]="config.type" [formControl]="config.controlRef" class="text-input" />
-			<small *ngIf="config.description" class="description">
-				{{ config.description }}
-			</small>
-			<div
-				*ngIf="config.controlRef.touched && config.controlRef.errors"
-				class="error-message"
-			>
-				<span *ngFor="let error of config.controlRef.errors | keyvalue">
-					{{ error.key }}: {{ error.value }}
-				</span>
-			</div>
+			@if (config.description) {
+				<small class="description">
+					{{ config.description }}
+				</small>
+			}
 			@if (config.removeable) {
 				<button type="button" (click)="remove()" class="remove-btn">Remove</button>
 			}

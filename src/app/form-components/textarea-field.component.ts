@@ -1,12 +1,11 @@
 import { Component, Input } from '@angular/core';
 import { ReactiveFormsModule } from '@angular/forms';
 
-import { CommonModule } from '@angular/common';
 import { SchemaFieldConfig } from '../models/form-models';
 
 @Component({
 	selector: 'app-textarea-field',
-	imports: [CommonModule, ReactiveFormsModule],
+	imports: [ReactiveFormsModule],
 	template: `
 		<label class="form-field">
 			{{ config.label }}
@@ -25,11 +24,6 @@ import { SchemaFieldConfig } from '../models/form-models';
 				{{ config.description }}
 			</small>
 		}
-		<div *ngIf="config.controlRef.touched && config.controlRef.errors" class="error-message">
-			<span *ngFor="let error of config.controlRef.errors | keyvalue">
-				{{ error.key }}: {{ error.value }}
-			</span>
-		</div>
 	`,
 	styles: [
 		`

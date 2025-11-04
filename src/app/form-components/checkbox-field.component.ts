@@ -1,28 +1,26 @@
-import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 import { ReactiveFormsModule } from '@angular/forms';
 import { SchemaFieldConfig } from '../models/form-models';
 
 @Component({
 	selector: 'app-checkbox-field',
-	imports: [CommonModule, ReactiveFormsModule],
+	imports: [ReactiveFormsModule],
 	template: `
 		<div class="form-field">
 			<label class="checkbox-container">
 				<input type="checkbox" [formControl]="config.controlRef" class="checkbox-input" />
 				<span class="checkbox-label">
 					{{ config.label }}
-					<span *ngIf="config.validations?.required" class="required">*</span>
+					@if (config.validations?.required) {
+						<span class="required">*</span>
+					}
 				</span>
 			</label>
-			<small *ngIf="config.description" class="description">
-				{{ config.description }}
-			</small>
-			<div *ngIf="config.controlRef.errors" class="error-message">
-				<span *ngFor="let error of config.controlRef.errors | keyvalue">
-					{{ error.key }}: {{ error.value }}
-				</span>
-			</div>
+			@if (config.description) {
+				<small class="description">
+					{{ config.description }}
+				</small>
+			}
 		</div>
 	`,
 	styles: [
