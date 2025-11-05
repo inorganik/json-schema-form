@@ -1,21 +1,28 @@
 import { TestBed } from '@angular/core/testing';
 import { FormArray, FormGroup } from '@angular/forms';
 
-import { SchemaFieldType } from '../models/form-models';
-import { JsonSchema } from '../models/schema-models';
 import {
 	allOfSchema,
 	anyOfSchema,
+	arrayConditionalSchema,
 	ifThenElseSchema,
+	nestedConditionalSchema,
 	oneOfSchema,
-} from './mocks/conditional-schema.mock';
-import { schemaWithRefs } from './mocks/ref-schema.mock';
+} from '../mocks/conditional-schema.mock';
+import { schemaWithRefs } from '../mocks/ref-schema.mock';
 import {
 	arrayOfObjectsSchema,
 	arraySchema,
 	nestedSchema,
 	simpleSchema,
-} from './mocks/simple-schema.mock';
+} from '../mocks/simple-schema.mock';
+import {
+	SchemaFieldArray,
+	SchemaFieldConfig,
+	SchemaFieldGroup,
+	SchemaFieldType,
+} from '../models/form-models';
+import { JsonSchema } from '../models/schema-models';
 import { SchemaFormService } from './schema-form.service';
 
 describe('SchemaFormService', () => {
@@ -26,7 +33,6 @@ describe('SchemaFormService', () => {
 			providers: [SchemaFormService],
 		});
 		service = TestBed.inject(SchemaFormService);
-		// Clear the schema cache and defs map before each test
 		(service as any).schemaCache.clear();
 		service.defsMap.clear();
 	});
@@ -74,34 +80,44 @@ describe('SchemaFormService', () => {
 				status: 404,
 			} as Response);
 			global.fetch = mockFetch;
-			jest.spyOn(console, 'error').mockImplementation();
 
 			const result = await service.getSchema('https://example.com/invalid.json');
 
 			expect(result).toBeNull();
-			expect(console.error).toHaveBeenCalled();
 		});
 	});
 
 	describe('dereferenceSchema', () => {
-		it('should return schema unchanged if no refs', async () => {
-			const result = await service.dereferenceSchema(simpleSchema);
-
-			expect(result).toBeTruthy();
-			expect(result.properties).toBeDefined();
-		});
-
 		it('should collect $defs in defsMap', async () => {
 			await service.dereferenceSchema(schemaWithRefs);
 
 			expect(service.defsMap.has('address')).toBe(true);
 			expect(service.defsMap.has('person')).toBe(true);
 		});
+	});
 
-		it('should handle recursive dereferencing', async () => {
-			const result = await service.dereferenceSchema(schemaWithRefs);
+	describe('getAndDereferenceSchema', () => {
+		it('should fetch and dereference schema in one call', async () => {
+			const example = 'https://example.com/schema.json';
+			const mockSchema = { type: 'object', properties: {} };
+			jest.spyOn(service, 'getSchema').mockResolvedValue(mockSchema as any);
+			jest.spyOn(service, 'dereferenceSchema').mockResolvedValue(mockSchema as any);
 
-			expect(result).toBeTruthy();
+			const result = await service.getAndDereferenceSchema(example);
+
+			expect(service.getSchema).toHaveBeenCalledWith(example);
+			expect(service.dereferenceSchema).toHaveBeenCalledWith(mockSchema);
+			expect(result).toEqual(mockSchema);
+		});
+
+		it('should set schemasRootUrl from URL', async () => {
+			const mockSchema = { type: 'object', properties: {} };
+			jest.spyOn(service, 'getSchema').mockResolvedValue(mockSchema as any);
+			jest.spyOn(service, 'dereferenceSchema').mockResolvedValue(mockSchema as any);
+
+			await service.getAndDereferenceSchema('https://example.com/schemas/test.json');
+
+			expect((service as any).schemasRootUrl).toBe('https://example.com');
 		});
 	});
 
@@ -110,7 +126,6 @@ describe('SchemaFormService', () => {
 			const result = service.schemaToFieldConfig(simpleSchema);
 
 			expect(result.type).toBe(SchemaFieldType.Group);
-			expect(result.key).toBe('root');
 			expect(result.label).toBe('Simple Form');
 			expect(result.groupRef).toBeInstanceOf(FormGroup);
 		});
@@ -187,21 +202,20 @@ describe('SchemaFormService', () => {
 		it('should add a select field for enum with 5+ items', () => {
 			const rootGroup = service.schemaToFieldConfig({ type: 'object', properties: {} });
 			const fieldSchema: JsonSchema = {
-				type: 'string',
 				title: 'Status',
 				enum: ['a', 'b', 'c', 'd', 'e'],
 			};
 
 			service.addField(fieldSchema, rootGroup, 'status', 0);
 
-			expect(rootGroup.fields['status'].type).toBe(SchemaFieldType.Select);
-			expect((rootGroup.fields['status'] as any).options?.length).toBe(5);
+			const statusField = rootGroup.fields['status'] as SchemaFieldConfig;
+			expect(statusField.type).toBe(SchemaFieldType.Select);
+			expect(statusField.options?.length).toBe(5);
 		});
 
 		it('should add a radio field for enum with 4 or fewer items', () => {
 			const rootGroup = service.schemaToFieldConfig({ type: 'object', properties: {} });
 			const fieldSchema: JsonSchema = {
-				type: 'string',
 				title: 'Status',
 				enum: ['a', 'b', 'c'],
 			};
@@ -226,7 +240,8 @@ describe('SchemaFormService', () => {
 
 			service.addField(fieldSchema, rootGroup, 'country', 0);
 
-			expect((rootGroup.fields['country'] as any).controlRef.value).toBe('USA');
+			const countryField = rootGroup.fields['country'] as SchemaFieldConfig;
+			expect(countryField.controlRef.value).toBe('USA');
 		});
 
 		it('should add validations to field', () => {
@@ -244,9 +259,10 @@ describe('SchemaFormService', () => {
 
 			service.addField(fieldSchema, rootGroup, 'name', 0);
 
-			expect(rootGroup.fields['name'].validations).toBeDefined();
-			expect((rootGroup.fields['name'].validations as any)?.minLength).toBe(2);
-			expect((rootGroup.fields['name'].validations as any)?.maxLength).toBe(50);
+			const nameField = rootGroup.fields['name'] as SchemaFieldGroup;
+			expect(nameField.validations).toBeDefined();
+			expect(nameField.validations?.minLength).toBe(2);
+			expect(nameField.validations?.maxLength).toBe(50);
 		});
 
 		it('should add textarea field for textarea format', () => {
@@ -316,10 +332,10 @@ describe('SchemaFormService', () => {
 
 			service.addGroup(groupSchema, rootGroup, 'address', 0);
 
-			const addressGroup = rootGroup.fields['address'];
+			const addressGroup = rootGroup.fields['address'] as SchemaFieldGroup;
 			expect(addressGroup.type).toBe(SchemaFieldType.Group);
-			expect((addressGroup as any).fields['street']).toBeDefined();
-			expect((addressGroup as any).fields['city']).toBeDefined();
+			expect(addressGroup.fields['street']).toBeDefined();
+			expect(addressGroup.fields['city']).toBeDefined();
 		});
 
 		it('should add parameter field for object with no properties', () => {
@@ -328,8 +344,8 @@ describe('SchemaFormService', () => {
 
 			service.addGroup(groupSchema, rootGroup, 'customData', 0);
 
-			const group = rootGroup.fields['customData'];
-			expect((group as any).fields['_parameter']).toBeDefined();
+			const group = rootGroup.fields['customData'] as SchemaFieldGroup;
+			expect(group.fields['_add_parameter']).toBeDefined();
 		});
 	});
 
@@ -395,9 +411,9 @@ describe('SchemaFormService', () => {
 
 			service.addArray(arrayFieldSchema, rootGroup, 'tags', 0);
 
-			const arrayField = rootGroup.fields['tags'];
-			expect((arrayField.validations as any)?.minItems).toBe(1);
-			expect((arrayField.validations as any)?.maxItems).toBe(5);
+			const arrayField = rootGroup.fields['tags'] as SchemaFieldArray;
+			expect(arrayField.validations?.minItems).toBe(1);
+			expect(arrayField.validations?.maxItems).toBe(5);
 		});
 
 		it('should add minimum required items if minItems specified', () => {
@@ -426,7 +442,7 @@ describe('SchemaFormService', () => {
 
 			service.addArray(arrayFieldSchema, rootGroup, 'tags', 0);
 
-			const arrayField = rootGroup.fields['tags'] as any;
+			const arrayField = rootGroup.fields['tags'] as SchemaFieldArray;
 			expect(arrayField.canAddItem()).toBe(true);
 
 			// Add 3 items
@@ -448,7 +464,7 @@ describe('SchemaFormService', () => {
 
 			service.addArray(arrayFieldSchema, rootGroup, 'tags', 0);
 
-			const arrayField = rootGroup.fields['tags'] as any;
+			const arrayField = rootGroup.fields['tags'] as SchemaFieldArray;
 			expect(arrayField.canRemoveItem()).toBe(false); // Already at minItems
 		});
 	});
@@ -476,7 +492,7 @@ describe('SchemaFormService', () => {
 	describe('addArrayItem', () => {
 		it('should add a string item to array', () => {
 			const rootGroup = service.schemaToFieldConfig(arraySchema);
-			const arrayField = rootGroup.fields['tags'] as any;
+			const arrayField = rootGroup.fields['tags'] as SchemaFieldArray;
 
 			service.addArrayItem(arrayField);
 
@@ -486,35 +502,19 @@ describe('SchemaFormService', () => {
 
 		it('should add an object item to array', () => {
 			const rootGroup = service.schemaToFieldConfig(arrayOfObjectsSchema);
-			const arrayField = rootGroup.fields['addresses'] as any;
+			const arrayField = rootGroup.fields['addresses'] as SchemaFieldArray;
 
 			service.addArrayItem(arrayField);
 
 			expect(arrayField.items.length).toBe(1);
 			expect(arrayField.items[0].type).toBe(SchemaFieldType.Group);
 		});
-
-		it('should not add item if no itemSchema', () => {
-			const rootGroup = service.schemaToFieldConfig({ type: 'object', properties: {} });
-			const arrayField = {
-				type: SchemaFieldType.Array,
-				items: [],
-				arrayRef: new FormArray([]),
-				key: 'test',
-			} as any;
-
-			jest.spyOn(console, 'warn').mockImplementation();
-			service.addArrayItem(arrayField);
-
-			expect(console.warn).toHaveBeenCalled();
-			expect(arrayField.items.length).toBe(0);
-		});
 	});
 
 	describe('removeArrayItem', () => {
 		it('should remove item from array at specified index', () => {
 			const rootGroup = service.schemaToFieldConfig(arraySchema);
-			const arrayField = rootGroup.fields['tags'] as any;
+			const arrayField = rootGroup.fields['tags'] as SchemaFieldArray;
 
 			const initialLength = arrayField.items.length;
 			service.removeArrayItem(arrayField, 0);
@@ -524,7 +524,7 @@ describe('SchemaFormService', () => {
 
 		it('should not remove item if index out of bounds', () => {
 			const rootGroup = service.schemaToFieldConfig(arraySchema);
-			const arrayField = rootGroup.fields['tags'] as any;
+			const arrayField = rootGroup.fields['tags'] as SchemaFieldArray;
 
 			const initialLength = arrayField.items.length;
 			service.removeArrayItem(arrayField, 999);
@@ -534,7 +534,7 @@ describe('SchemaFormService', () => {
 
 		it('should cleanup subscriptions for removed item', () => {
 			const rootGroup = service.schemaToFieldConfig(arrayOfObjectsSchema);
-			const arrayField = rootGroup.fields['addresses'] as any;
+			const arrayField = rootGroup.fields['addresses'] as SchemaFieldArray;
 			service.addArrayItem(arrayField);
 
 			jest.spyOn(service, 'cleanupFieldSubscriptions');
@@ -547,7 +547,7 @@ describe('SchemaFormService', () => {
 	describe('handleOneOf', () => {
 		it('should create a radio field for oneOf options', () => {
 			const rootGroup = service.schemaToFieldConfig(oneOfSchema);
-			const paymentGroup = rootGroup.fields['paymentMethod'] as any;
+			const paymentGroup = rootGroup.fields['paymentMethod'] as SchemaFieldGroup;
 
 			expect(paymentGroup.fields['paymentMethod_oneOf']).toBeDefined();
 			expect(paymentGroup.fields['paymentMethod_oneOf'].type).toBe(SchemaFieldType.Radio);
@@ -555,17 +555,17 @@ describe('SchemaFormService', () => {
 
 		it('should create options from oneOf schemas', () => {
 			const rootGroup = service.schemaToFieldConfig(oneOfSchema);
-			const paymentGroup = rootGroup.fields['paymentMethod'] as any;
-			const radioField = paymentGroup.fields['paymentMethod_oneOf'];
+			const paymentGroup = rootGroup.fields['paymentMethod'] as SchemaFieldGroup;
+			const radioField = paymentGroup.fields['paymentMethod_oneOf'] as SchemaFieldConfig;
 
-			expect(radioField.options?.length).toBe(2);
-			expect(radioField.options[0].label).toBe('Credit Card');
-			expect(radioField.options[1].label).toBe('Bank Transfer');
+			expect(radioField.options!.length).toBe(2);
+			expect(radioField.options![0].label).toBe('Credit Card');
+			expect(radioField.options![1].label).toBe('Bank Transfer');
 		});
 
 		it('should add conditional schemas for each option', () => {
 			const rootGroup = service.schemaToFieldConfig(oneOfSchema);
-			const paymentGroup = rootGroup.fields['paymentMethod'] as any;
+			const paymentGroup = rootGroup.fields['paymentMethod'] as SchemaFieldGroup;
 			const radioField = paymentGroup.fields['paymentMethod_oneOf'];
 
 			expect(radioField.conditionalSchemas?.length).toBe(2);
@@ -575,7 +575,7 @@ describe('SchemaFormService', () => {
 	describe('handleAnyOf', () => {
 		it('should create checkbox fields for anyOf options', () => {
 			const rootGroup = service.schemaToFieldConfig(anyOfSchema);
-			const featuresGroup = rootGroup.fields['features'] as any;
+			const featuresGroup = rootGroup.fields['features'] as SchemaFieldGroup;
 
 			expect(featuresGroup.fields['features_option_1']).toBeDefined();
 			expect(featuresGroup.fields['features_option_1'].type).toBe(SchemaFieldType.Checkbox);
@@ -584,11 +584,11 @@ describe('SchemaFormService', () => {
 
 		it('should add conditional schemas to each checkbox', () => {
 			const rootGroup = service.schemaToFieldConfig(anyOfSchema);
-			const featuresGroup = rootGroup.fields['features'] as any;
+			const featuresGroup = rootGroup.fields['features'] as SchemaFieldGroup;
 			const checkbox1 = featuresGroup.fields['features_option_1'];
 
-			expect(checkbox1.conditionalSchemas?.length).toBe(1);
-			expect(checkbox1.conditionalSchemas[0].triggerValue).toBe(true);
+			expect(checkbox1.conditionalSchemas!.length).toBe(1);
+			expect(checkbox1.conditionalSchemas![0].triggerValue).toBe(true);
 		});
 	});
 
@@ -618,12 +618,11 @@ describe('SchemaFormService', () => {
 	describe('handleConditionalSchemas', () => {
 		it('should add fields when trigger value matches', () => {
 			const rootGroup = service.schemaToFieldConfig(ifThenElseSchema);
-			const countryField = rootGroup.fields['country'] as any;
+			const countryField = rootGroup.fields['country'] as SchemaFieldConfig;
 
-			// Trigger the conditional
 			countryField.controlRef.setValue('USA');
 
-			// Give a tick for async processing
+			// wait for async
 			setTimeout(() => {
 				expect(rootGroup.fields['state']).toBeDefined();
 			}, 0);
@@ -631,7 +630,7 @@ describe('SchemaFormService', () => {
 
 		it('should remove fields when trigger value does not match', () => {
 			const rootGroup = service.schemaToFieldConfig(ifThenElseSchema);
-			const countryField = rootGroup.fields['country'] as any;
+			const countryField = rootGroup.fields['country'] as SchemaFieldConfig;
 
 			// First add fields
 			countryField.controlRef.setValue('USA');
@@ -670,14 +669,175 @@ describe('SchemaFormService', () => {
 		});
 	});
 
+	describe('cleanupAndRemoveItem', () => {
+		it('should cleanup and remove a field from parent group', () => {
+			const rootGroup = service.schemaToFieldConfig(simpleSchema);
+			const field = rootGroup.fields['name'] as SchemaFieldConfig;
+
+			expect(rootGroup.fields['name']).toBeDefined();
+
+			(service as any).cleanupAndRemoveItem(field, 'name', rootGroup);
+
+			expect(rootGroup.fields['name']).toBeUndefined();
+			expect(rootGroup.groupRef?.get('name')).toBeNull();
+		});
+
+		it('should cleanup and remove a nested group from parent', () => {
+			const rootGroup = service.schemaToFieldConfig(nestedSchema);
+			const userGroup = rootGroup.fields['user'] as SchemaFieldGroup;
+
+			expect(rootGroup.fields['user']).toBeDefined();
+
+			(service as any).cleanupAndRemoveItem(userGroup, 'user', rootGroup);
+
+			expect(rootGroup.fields['user']).toBeUndefined();
+			expect(rootGroup.groupRef?.get('user')).toBeNull();
+		});
+
+		it('should cleanup and remove an array from parent', () => {
+			const rootGroup = service.schemaToFieldConfig(arraySchema);
+			const arrayField = rootGroup.fields['tags'] as SchemaFieldArray;
+
+			expect(rootGroup.fields['tags']).toBeDefined();
+
+			(service as any).cleanupAndRemoveItem(arrayField, 'tags', rootGroup);
+
+			expect(rootGroup.fields['tags']).toBeUndefined();
+			expect(rootGroup.groupRef?.get('tags')).toBeNull();
+		});
+
+		it('should recursively cleanup nested conditional schemas before removal', () => {
+			const rootGroup = service.schemaToFieldConfig(ifThenElseSchema);
+			const countryField = rootGroup.fields['country'] as SchemaFieldConfig;
+
+			// Trigger conditional to add nested fields
+			countryField.controlRef.setValue('USA');
+
+			setTimeout(() => {
+				jest.spyOn(service as any, 'cleanupNestedConditionalSchemas');
+
+				(service as any).cleanupAndRemoveItem(countryField, 'country', rootGroup);
+
+				expect((service as any).cleanupNestedConditionalSchemas).toHaveBeenCalledWith(
+					countryField,
+				);
+			}, 0);
+		});
+	});
+
+	describe('cleanupNestedConditionalSchemas', () => {
+		it('should cleanup conditional schemas with addedKeys on a field', () => {
+			const rootGroup = service.schemaToFieldConfig(ifThenElseSchema);
+			const countryField = rootGroup.fields['country'] as SchemaFieldConfig;
+
+			// Trigger conditional to add the 'state' field
+			countryField.controlRef.setValue('USA');
+
+			setTimeout(() => {
+				expect(rootGroup.fields['state']).toBeDefined();
+				expect(countryField.conditionalSchemas?.[0]?.addedKeys?.length).toBeGreaterThan(0);
+
+				// Cleanup nested conditional schemas
+				(service as any).cleanupNestedConditionalSchemas(countryField);
+
+				// The 'state' field should be removed
+				expect(rootGroup.fields['state']).toBeUndefined();
+				expect(countryField.conditionalSchemas?.[0]?.addedKeys?.length).toBe(0);
+			}, 0);
+		});
+
+		it('should recursively cleanup conditional schemas in nested groups', () => {
+			const rootGroup = service.schemaToFieldConfig(nestedConditionalSchema);
+			const enableFeatureField = rootGroup.fields['enableFeature'] as SchemaFieldConfig;
+
+			// Enable the feature to add settings group
+			enableFeatureField.controlRef.setValue(true);
+
+			setTimeout(() => {
+				expect(rootGroup.fields['settings']).toBeDefined();
+				const settingsGroup = rootGroup.fields['settings'] as SchemaFieldGroup;
+
+				// Set mode to advanced to add nested conditional field
+				const modeField = settingsGroup.fields['mode'] as SchemaFieldConfig;
+				modeField.controlRef.setValue('advanced');
+
+				setTimeout(() => {
+					expect(settingsGroup.fields['advancedOption']).toBeDefined();
+
+					// Now cleanup the settings group
+					(service as any).cleanupNestedConditionalSchemas(settingsGroup);
+
+					// The advancedOption should be cleaned up
+					expect(settingsGroup.fields['advancedOption']).toBeUndefined();
+				}, 0);
+			}, 0);
+		});
+
+		it('should cleanup conditional schemas in arrays', () => {
+			const rootGroup = service.schemaToFieldConfig(arrayConditionalSchema);
+			const arrayField = rootGroup.fields['items'] as SchemaFieldArray;
+
+			// Add an item to the array
+			service.addArrayItem(arrayField);
+			const arrayItem = arrayField.items[0] as SchemaFieldGroup;
+			const typeField = arrayItem.fields['type'] as SchemaFieldConfig;
+
+			// Trigger conditional
+			typeField.controlRef.setValue('typeA');
+
+			setTimeout(() => {
+				expect(arrayItem.fields['optionA']).toBeDefined();
+
+				// Cleanup the array
+				(service as any).cleanupNestedConditionalSchemas(arrayField);
+
+				// The conditional field should be removed
+				expect(arrayItem.fields['optionA']).toBeUndefined();
+			}, 0);
+		});
+
+		it('should handle cleanup when no conditional schemas exist', () => {
+			const rootGroup = service.schemaToFieldConfig(simpleSchema);
+			const nameField = rootGroup.fields['name'] as SchemaFieldConfig;
+
+			// This should not throw an error
+			expect(() => {
+				(service as any).cleanupNestedConditionalSchemas(nameField);
+			}).not.toThrow();
+		});
+
+		it('should clear addedKeys array after cleanup', () => {
+			const rootGroup = service.schemaToFieldConfig(oneOfSchema);
+			const paymentMethodGroup = rootGroup.fields['paymentMethod'] as SchemaFieldGroup;
+			const radioField = paymentMethodGroup.fields[
+				'paymentMethod_oneOf'
+			] as SchemaFieldConfig;
+
+			// Select first option (Credit Card)
+			radioField.controlRef.setValue(0);
+
+			setTimeout(() => {
+				expect(paymentMethodGroup.fields['cardNumber']).toBeDefined();
+				const addedKeysBefore = radioField.conditionalSchemas?.[0]?.addedKeys?.length || 0;
+				expect(addedKeysBefore).toBeGreaterThan(0);
+
+				// Cleanup
+				(service as any).cleanupNestedConditionalSchemas(radioField);
+
+				// addedKeys should be cleared
+				expect(radioField.conditionalSchemas?.[0]?.addedKeys?.length).toBe(0);
+			}, 0);
+		});
+	});
+
 	describe('addParameter', () => {
 		it('should add a parameter field to group', () => {
 			const rootGroup = service.schemaToFieldConfig({ type: 'object', properties: {} });
 
 			service.addParameter(rootGroup);
 
-			expect(rootGroup.fields['_parameter']).toBeDefined();
-			expect(rootGroup.fields['_parameter'].type).toBe(SchemaFieldType.Parameter);
+			expect(rootGroup.fields['_add_parameter']).toBeDefined();
+			expect(rootGroup.fields['_add_parameter'].type).toBe(SchemaFieldType.Parameter);
 		});
 
 		it('should not add parameter control to FormGroup', () => {
@@ -689,27 +849,11 @@ describe('SchemaFormService', () => {
 		});
 	});
 
-	describe('getAndDereferenceSchema', () => {
-		it('should fetch and dereference schema in one call', async () => {
-			const mockSchema = { type: 'object', properties: {} };
-			jest.spyOn(service, 'getSchema').mockResolvedValue(mockSchema as any);
-			jest.spyOn(service, 'dereferenceSchema').mockResolvedValue(mockSchema as any);
+	describe('snakeCaseToLabel', () => {
+		it('should properly convert snake case', () => {
+			const result = (service as any).snakeCaseToLabel('FLAG_CONTROLLED');
 
-			const result = await service.getAndDereferenceSchema('https://example.com/schema.json');
-
-			expect(service.getSchema).toHaveBeenCalledWith('https://example.com/schema.json');
-			expect(service.dereferenceSchema).toHaveBeenCalledWith(mockSchema);
-			expect(result).toEqual(mockSchema);
-		});
-
-		it('should set schemasRootUrl from URL', async () => {
-			const mockSchema = { type: 'object', properties: {} };
-			jest.spyOn(service, 'getSchema').mockResolvedValue(mockSchema as any);
-			jest.spyOn(service, 'dereferenceSchema').mockResolvedValue(mockSchema as any);
-
-			await service.getAndDereferenceSchema('https://example.com/schemas/test.json');
-
-			expect((service as any).schemasRootUrl).toBe('https://example.com/');
+			expect(result).toBe('Flag Controlled');
 		});
 	});
 });

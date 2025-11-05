@@ -29,6 +29,9 @@ import { FieldComponent } from './field.component';
 						}
 						<div class="group-fields">
 							@for (field of getGroupEntries(config); track field.key) {
+								@if (field.rule === 'above') {
+									<hr />
+								}
 								@switch (field.type) {
 									@case (FieldType.Group) {
 										<app-field-container [config]="asGroupOrArray(field)" />
@@ -40,12 +43,18 @@ import { FieldComponent } from './field.component';
 										<app-field [config]="asField(field)" />
 									}
 								}
+								@if (field.rule === 'below') {
+									<hr />
+								}
 							}
 						</div>
 					</fieldset>
 				} @else {
 					<div class="group-fields">
 						@for (field of getGroupEntries(config); track field.key) {
+							@if (field.rule === 'above') {
+								<hr />
+							}
 							@switch (field.type) {
 								@case (FieldType.Group) {
 									<app-field-container [config]="asGroupOrArray(field)" />
@@ -56,6 +65,9 @@ import { FieldComponent } from './field.component';
 								@default {
 									<app-field [config]="asField(field)" />
 								}
+							}
+							@if (field.rule === 'below') {
+								<hr />
 							}
 						}
 					</div>

@@ -1,4 +1,4 @@
-import { JsonSchema } from '../../models/schema-models';
+import { JsonSchema } from '../models/schema-models';
 
 export const schemaWithRefs: JsonSchema = {
 	type: 'object',

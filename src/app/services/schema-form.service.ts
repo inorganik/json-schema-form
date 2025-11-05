@@ -27,7 +27,7 @@ export class SchemaFormService {
 	private schemaCache: Map<string, JsonSchema> = new Map();
 
 	// subscriptions for watching field values
-	private subscriptions = new Map<string, Subscription>();
+	public subscriptions = new Map<string, Subscription>();
 
 	// Toggle debug property in field configs, enabling display of unique keys
 	private debug = false;
@@ -978,18 +978,13 @@ export class SchemaFormService {
 			if (conditionalSchema.addedKeys && conditionalSchema.addedKeys.length > 0) {
 				if (shouldRemove || !shouldAdd) {
 					// Remove all previously added keys
-					for (const key of conditionalSchema.addedKeys) {
-						if (parent.type === SchemaFieldType.Group) {
-							const parentGroup = parent as SchemaFieldGroup;
+					if (parent.type === SchemaFieldType.Group) {
+						const parentGroup = parent as SchemaFieldGroup;
+						for (const key of conditionalSchema.addedKeys) {
 							const item = parentGroup.fields[key];
 							if (item) {
-								if (item.type === SchemaFieldType.Group) {
-									this.removeGroup(key, parent);
-								} else if (item.type === SchemaFieldType.Array) {
-									this.removeArray(key, parent);
-								} else {
-									this.removeField(key, parentGroup);
-								}
+								// Clean up and remove the item
+								this.cleanupAndRemoveItem(item, key, parent);
 							}
 						}
 					}
@@ -1145,6 +1140,90 @@ export class SchemaFormService {
 				if (subscription) {
 					subscription.unsubscribe();
 					this.subscriptions.delete(fieldConfig.uniqueKey);
+				}
+			}
+		}
+	}
+
+	/**
+	 * Helper to clean up a nested conditional schemas and removes it from its parent
+	 *
+	 * @param item The item to clean up and remove
+	 * @param key The key of the item in the parent
+	 * @param parent The parent group or array
+	 */
+	private cleanupAndRemoveItem(
+		item: SchemaFieldConfig | SchemaFieldGroup | SchemaFieldArray,
+		key: string,
+		parent: SchemaFieldGroup | SchemaFieldArray,
+	): void {
+		// Recursively clean up nested conditional schemas
+		this.cleanupNestedConditionalSchemas(item);
+
+		// Remove the item from the parent
+		if (parent.type === SchemaFieldType.Group) {
+			const parentGroup = parent as SchemaFieldGroup;
+			if (item.type === SchemaFieldType.Group) {
+				this.removeGroup(key, parent);
+			} else if (item.type === SchemaFieldType.Array) {
+				this.removeArray(key, parent);
+			} else {
+				this.removeField(key, parentGroup);
+			}
+		}
+	}
+
+	/**
+	 * Recursively cleans up nested conditional schemas that have been applied to a field/group/array.
+	 * Ensures that when removing a field that has conditionalSchemas with addedKeys,
+	 * we also remove any nested fields that were added by those conditional schemas.
+	 *
+	 * @param item The field, group, or array to clean up
+	 */
+	private cleanupNestedConditionalSchemas(
+		item: SchemaFieldConfig | SchemaFieldGroup | SchemaFieldArray,
+	): void {
+		// First, handle groups and arrays - recursively clean up all fields within
+		if (item.type === SchemaFieldType.Group) {
+			const group = item as SchemaFieldGroup;
+			// Create a copy of field keys to avoid modification during iteration
+			const fieldKeys = Object.keys(group.fields);
+			for (const fieldKey of fieldKeys) {
+				const field = group.fields[fieldKey];
+				if (field) {
+					this.cleanupNestedConditionalSchemas(field);
+				}
+			}
+		}
+
+		if (item.type === SchemaFieldType.Array) {
+			const array = item as SchemaFieldArray;
+			// Create a copy of items to avoid modification during iteration
+			const items = [...array.items];
+			for (const arrayItem of items) {
+				this.cleanupNestedConditionalSchemas(arrayItem);
+			}
+		}
+
+		// Then handle field configs with conditional schemas
+		if (item.conditionalSchemas) {
+			for (const conditionalSchema of item.conditionalSchemas) {
+				if (conditionalSchema.addedKeys && conditionalSchema.addedKeys.length > 0) {
+					// Find the parent where these keys were added
+					// For fields with conditionalSchemas, the keys are added to the field's parent
+					const parent = item.parent;
+					if (parent && parent.type === SchemaFieldType.Group) {
+						// Remove each added key
+						for (const key of conditionalSchema.addedKeys) {
+							const nestedItem = (parent as SchemaFieldGroup).fields[key];
+							if (nestedItem) {
+								// Clean up and remove the nested item
+								this.cleanupAndRemoveItem(nestedItem, key, parent);
+							}
+						}
+					}
+					// Clear the addedKeys array
+					conditionalSchema.addedKeys = [];
 				}
 			}
 		}

@@ -1,4 +1,4 @@
-import { JsonSchema } from '../../models/schema-models';
+import { JsonSchema } from '../models/schema-models';
 
 export const oneOfSchema: JsonSchema = {
 	type: 'object',
@@ -143,4 +143,92 @@ export const allOfSchema: JsonSchema = {
 			},
 		},
 	],
+};
+
+export const nestedConditionalSchema: JsonSchema = {
+	type: 'object',
+	properties: {
+		enableFeature: {
+			type: 'boolean',
+			title: 'Enable Feature',
+		},
+	},
+	allOf: [
+		{
+			if: {
+				properties: {
+					enableFeature: { const: true },
+				},
+			},
+			then: {
+				properties: {
+					settings: {
+						type: 'object',
+						title: 'Settings',
+						properties: {
+							mode: {
+								type: 'string',
+								title: 'Mode',
+								enum: ['simple', 'advanced'],
+							},
+						},
+						allOf: [
+							{
+								if: {
+									properties: {
+										mode: { const: 'advanced' },
+									},
+								},
+								then: {
+									properties: {
+										advancedOption: {
+											type: 'string',
+											title: 'Advanced Option',
+										},
+									},
+								},
+							},
+						],
+					},
+				},
+			},
+		},
+	],
+};
+
+export const arrayConditionalSchema: JsonSchema = {
+	type: 'object',
+	properties: {
+		items: {
+			type: 'array',
+			title: 'Items',
+			items: {
+				type: 'object',
+				properties: {
+					type: {
+						type: 'string',
+						title: 'Type',
+						enum: ['typeA', 'typeB'],
+					},
+				},
+				allOf: [
+					{
+						if: {
+							properties: {
+								type: { const: 'typeA' },
+							},
+						},
+						then: {
+							properties: {
+								optionA: {
+									type: 'string',
+									title: 'Option A',
+								},
+							},
+						},
+					},
+				],
+			},
+		},
+	},
 };
