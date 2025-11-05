@@ -29,7 +29,7 @@ export class SchemaFormService {
 	// subscriptions for watching field values
 	private subscriptions = new Map<string, Subscription>();
 
-	// Toggle showing field config unique keys on page
+	// Toggle debug property in field configs, enabling display of unique keys
 	private debug = false;
 
 	/**
@@ -39,7 +39,7 @@ export class SchemaFormService {
 	 */
 	async getAndDereferenceSchema(url: string): Promise<JsonSchema> {
 		const urlObj = new URL(url);
-		this.schemasRootUrl = urlObj.origin + '/';
+		this.schemasRootUrl = urlObj.origin;
 		const schema = await this.getSchema(url);
 		return this.dereferenceSchema(schema);
 	}
@@ -49,7 +49,7 @@ export class SchemaFormService {
 	 */
 	async getSchema(url: string): Promise<JsonSchema | null> {
 		if (this.schemaCache.has(url)) {
-			return this.schemaCache.get(url)!;
+			return this.schemaCache.get(url);
 		}
 		try {
 			const response = await fetch(url);
@@ -192,7 +192,6 @@ export class SchemaFormService {
 			return this.defsMap.get(key);
 		} else {
 			console.warn(`Could not resolve $ref: ${ref}`);
-			console.log('defs map', this.defsMap);
 			return null;
 		}
 	}
@@ -294,7 +293,7 @@ export class SchemaFormService {
 				for (const [ifKey, ifSchema] of Object.entries(schema.if.properties)) {
 					// Look for the field in the parent group
 					// Walk up the tree if needed to find the root group where the field is defined
-					let targetGroup =
+					const targetGroup =
 						parent.type === SchemaFieldType.Group ? (parent as SchemaFieldGroup) : null;
 					let field: SchemaFieldConfig | SchemaFieldGroup | SchemaFieldArray | undefined;
 
@@ -361,7 +360,7 @@ export class SchemaFormService {
 		const baseKey = key || Math.random().toString(36).substring(2);
 
 		// Determine target group based on whether we have a key
-		let targetGroup: SchemaFieldGroup = parent as SchemaFieldGroup;
+		const targetGroup: SchemaFieldGroup = parent as SchemaFieldGroup;
 		let fieldsetGroup: SchemaFieldGroup | null = null;
 
 		if (key) {
@@ -376,8 +375,8 @@ export class SchemaFormService {
 		}
 
 		// Create checkbox fields for each anyOf option
-		for (let i = 0; i < schema.anyOf!.length; i++) {
-			let anyOfSchema = schema.anyOf![i];
+		for (let i = 0; i < schema.anyOf.length; i++) {
+			let anyOfSchema = schema.anyOf[i];
 			if (anyOfSchema.$ref) {
 				anyOfSchema = this.resolveRef(anyOfSchema.$ref);
 			}
@@ -438,7 +437,7 @@ export class SchemaFormService {
 		const baseKey = key || Math.random().toString(36).substring(2);
 
 		// Determine target group based on whether we have a key
-		let targetGroup: SchemaFieldGroup = parent as SchemaFieldGroup;
+		const targetGroup: SchemaFieldGroup = parent as SchemaFieldGroup;
 		let fieldsetGroup: SchemaFieldGroup | null = null;
 
 		if (key) {
@@ -450,11 +449,10 @@ export class SchemaFormService {
 			};
 			this.addGroup(groupSchema, parent, key);
 			fieldsetGroup = (parent as SchemaFieldGroup).fields[key] as SchemaFieldGroup;
-			targetGroup = parent as SchemaFieldGroup;
 		}
 
 		// Create radio field for oneOf selection
-		const options = schema.oneOf!.map((oneOfSchema, i) => {
+		const options = schema.oneOf.map((oneOfSchema, i) => {
 			if (oneOfSchema.$ref) {
 				oneOfSchema = this.resolveRef(oneOfSchema.$ref);
 			}
@@ -484,7 +482,7 @@ export class SchemaFormService {
 			type: SchemaFieldType.Radio,
 			options,
 			parent: radioParent,
-			conditionalSchemas: schema.oneOf!.map(
+			conditionalSchemas: schema.oneOf.map(
 				(oneOfSchema, i) =>
 					({
 						triggerValue: i,
@@ -521,7 +519,9 @@ export class SchemaFormService {
 
 		// Create unique key with index prefix if provided
 		let uniqueKey = parent.uniqueKey;
-		if (index !== undefined) uniqueKey += '_' + `00${index}`.slice(-3);
+		if (index !== undefined) {
+			uniqueKey += '_' + `00${index}`.slice(-3);
+		}
 		uniqueKey += '_' + key;
 
 		let title = schema.title || this.snakeCaseToLabel(key);
@@ -592,7 +592,7 @@ export class SchemaFormService {
 		};
 
 		// Add to parent fields (but not to the FormGroup)
-		parent.fields['_parameter'] = parameterField;
+		parent.fields['_add_parameter'] = parameterField;
 	}
 
 	/**
@@ -639,7 +639,7 @@ export class SchemaFormService {
 		key: string,
 		index?: number,
 		removeable = false,
-	): void {
+	): SchemaFieldConfig {
 		// Build validators using helper method
 		const { validators, validations } = this.buildValidators(schema, parent);
 
@@ -684,7 +684,9 @@ export class SchemaFormService {
 		// Create unique key with index prefix if provided
 		let uniqueKey = parent.uniqueKey;
 		if (parent.type !== SchemaFieldType.Array) {
-			if (index !== undefined) uniqueKey += '_' + `00${index}`.slice(-3);
+			if (index !== undefined) {
+				uniqueKey += '_' + `00${index}`.slice(-3);
+			}
 		}
 		uniqueKey += '_' + key;
 
@@ -736,6 +738,7 @@ export class SchemaFormService {
 			parentArray.items.push(fieldConfig);
 			parentArray.arrayRef?.push(control);
 		}
+		return fieldConfig;
 	}
 
 	/**
@@ -777,8 +780,7 @@ export class SchemaFormService {
 		// Create unique key with index prefix if provided
 		let uniqueKey = parent.uniqueKey;
 		if (parent.type !== SchemaFieldType.Array) {
-			if (index !== undefined) uniqueKey += '_' + `00${index}`.slice(-3);
-			uniqueKey += '_' + key;
+			uniqueKey += index !== undefined ? '_' + `00${index}`.slice(-3) : '_' + key;
 		}
 
 		// Build validations
@@ -979,11 +981,11 @@ export class SchemaFormService {
 					for (const key of conditionalSchema.addedKeys) {
 						if (parent.type === SchemaFieldType.Group) {
 							const parentGroup = parent as SchemaFieldGroup;
-							const field = parentGroup.fields[key];
-							if (field) {
-								if (field.type === SchemaFieldType.Group) {
+							const item = parentGroup.fields[key];
+							if (item) {
+								if (item.type === SchemaFieldType.Group) {
 									this.removeGroup(key, parent);
-								} else if (field.type === SchemaFieldType.Array) {
+								} else if (item.type === SchemaFieldType.Array) {
 									this.removeArray(key, parent);
 								} else {
 									this.removeField(key, parentGroup);
