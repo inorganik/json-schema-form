@@ -165,9 +165,9 @@ export class SchemaFormService {
 			renderFieldset: false,
 		};
 
-		// Add required validation if present
+		// Store the required fields array from the schema
 		if (schema.required && schema.required.length > 0) {
-			rootGroup.validations = { required: true };
+			rootGroup.requiredFields = schema.required;
 		}
 
 		// Process the schema (handles allOf, properties, anyOf, oneOf, if/then/else)
@@ -544,9 +544,9 @@ export class SchemaFormService {
 			renderFieldset: parent.type !== SchemaFieldType.Array,
 		};
 
-		// Add required validation if present
+		// Store the required fields array from the schema
 		if (schema.required && schema.required.length > 0) {
-			fieldGroup.validations = { required: true };
+			fieldGroup.requiredFields = schema.required;
 		}
 
 		// Add to parent
@@ -641,7 +641,7 @@ export class SchemaFormService {
 		removeable = false,
 	): SchemaFieldConfig {
 		// Build validators using helper method
-		const { validators, validations } = this.buildValidators(schema, parent);
+		const { validators, validations } = this.buildValidators(schema, parent, key);
 
 		// Create form control with default value and validators
 		const defaultValue =
@@ -998,6 +998,25 @@ export class SchemaFormService {
 				shouldAdd &&
 				(!conditionalSchema.addedKeys || conditionalSchema.addedKeys.length === 0)
 			) {
+				// Update the parent's requiredFields if the conditional schema has required fields
+				if (
+					conditionalSchema.schema.required &&
+					conditionalSchema.schema.required.length > 0 &&
+					parent.type === SchemaFieldType.Group
+				) {
+					const parentGroup = parent as SchemaFieldGroup;
+					if (!parentGroup.requiredFields) {
+						parentGroup.requiredFields = [];
+					}
+					// Merge in the new required fields, avoiding duplicates
+					for (const requiredKey of conditionalSchema.schema.required) {
+						if (!parentGroup.requiredFields.includes(requiredKey)) {
+							parentGroup.requiredFields.push(requiredKey);
+						}
+					}
+				}
+
+				// Create a modified parent with the field's uniqueKey for proper ordering
 				const conditionalParent = { ...parent, uniqueKey: field.uniqueKey };
 				const addedKeys = this.processProperties(
 					conditionalSchema.schema,
@@ -1015,14 +1034,15 @@ export class SchemaFormService {
 	private buildValidators(
 		schema: JsonSchema,
 		parent: SchemaFieldGroup | SchemaFieldArray,
+		fieldKey?: string,
 	): { validators: any[]; validations: any } {
 		const validators = [];
 		const validations: any = {};
 
-		// Check if field is required
-		if (parent.type === SchemaFieldType.Group) {
+		// Check if field is required by looking at parent's requiredFields array
+		if (parent.type === SchemaFieldType.Group && fieldKey) {
 			const parentGroup = parent as SchemaFieldGroup;
-			if (parentGroup.validations?.required) {
+			if (parentGroup.requiredFields && parentGroup.requiredFields.includes(fieldKey)) {
 				validators.push(Validators.required);
 				validations.required = true;
 			}

@@ -141,3 +141,21 @@ export const arrayOfObjectsSchema: JsonSchema = {
 		},
 	},
 };
+
+export const arrayFieldSchema: JsonSchema = {
+	type: 'array',
+	title: 'Columns',
+	items: {
+		type: 'object',
+		properties: {
+			title: { type: 'string', title: 'Title' },
+			components: {
+				type: 'array',
+				items: { type: 'string' },
+				title: 'Components',
+			},
+		},
+		required: ['components'],
+	},
+	minItems: 1,
+};

@@ -69,12 +69,13 @@ export interface SchemaFieldGroup extends BaseSchemaConfig {
 	fields: { [key: string]: SchemaFieldConfig | SchemaFieldGroup | SchemaFieldArray };
 	validations?: FieldValidations;
 	renderFieldset?: boolean;
+	requiredFields?: string[];
 }
 
 export interface SchemaFieldArray extends BaseSchemaConfig {
 	arrayRef: FormArray;
 	items: Array<SchemaFieldConfig | SchemaFieldGroup | SchemaFieldArray>;
-	itemSchema?: JsonSchema; // Schema template for array items
+	itemSchema?: JsonSchema;
 	validations?: FieldArrayValidations;
 	canAddItem: () => boolean;
 	canRemoveItem: () => boolean;

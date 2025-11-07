@@ -2,7 +2,7 @@ import { JsonSchema } from '../models/schema-models';
 
 export const oneOfSchema: JsonSchema = {
 	type: 'object',
-	title: 'One Of Form',
+	title: 'One Of Form with Required',
 	properties: {
 		paymentMethod: {
 			title: 'Payment Method',
@@ -19,7 +19,12 @@ export const oneOfSchema: JsonSchema = {
 							type: 'string',
 							title: 'CVV',
 						},
+						expiryDate: {
+							type: 'string',
+							title: 'Expiry Date',
+						},
 					},
+					required: ['cardNumber', 'cvv'], // Only these two are required
 				},
 				{
 					title: 'Bank Transfer',
@@ -34,6 +39,7 @@ export const oneOfSchema: JsonSchema = {
 							title: 'Routing Number',
 						},
 					},
+					required: ['accountNumber'], // Only account number is required
 				},
 			],
 		},

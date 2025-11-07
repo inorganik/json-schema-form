@@ -11,6 +11,7 @@ import {
 } from '../mocks/conditional-schema.mock';
 import { schemaWithRefs } from '../mocks/ref-schema.mock';
 import {
+	arrayFieldSchema,
 	arrayOfObjectsSchema,
 	arraySchema,
 	nestedSchema,
@@ -139,10 +140,25 @@ describe('SchemaFormService', () => {
 			expect(result.fields['active']).toBeDefined();
 		});
 
-		it('should add required validation to root group', () => {
+		it('should store required fields array in root group', () => {
 			const result = service.schemaToFieldConfig(simpleSchema);
 
-			expect(result.validations?.required).toBe(true);
+			expect(result.requiredFields).toEqual(['name', 'email']);
+		});
+
+		it('should mark only required fields with required validation', () => {
+			const result = service.schemaToFieldConfig(simpleSchema);
+
+			// 'name' and 'email' are required in simpleSchema
+			const nameField = result.fields['name'] as SchemaFieldConfig;
+			const emailField = result.fields['email'] as SchemaFieldConfig;
+			const ageField = result.fields['age'] as SchemaFieldConfig;
+			const activeField = result.fields['active'] as SchemaFieldConfig;
+
+			expect(nameField.validations?.required).toBe(true);
+			expect(emailField.validations?.required).toBe(true);
+			expect(ageField.validations?.required).toBeUndefined();
+			expect(activeField.validations?.required).toBeUndefined();
 		});
 
 		it('should handle nested objects', () => {
@@ -467,6 +483,26 @@ describe('SchemaFormService', () => {
 			const arrayField = rootGroup.fields['tags'] as SchemaFieldArray;
 			expect(arrayField.canRemoveItem()).toBe(false); // Already at minItems
 		});
+
+		it('should only mark specified fields as required in array item objects', () => {
+			const rootGroup = service.schemaToFieldConfig({ type: 'object', properties: {} });
+			service.addArray(arrayFieldSchema, rootGroup, 'columns', 0);
+
+			const arrayField = rootGroup.fields['columns'] as SchemaFieldArray;
+			const firstItem = arrayField.items[0] as SchemaFieldGroup;
+
+			// Check that the item group has the correct requiredFields
+			expect(firstItem.requiredFields).toEqual(['components']);
+
+			// Check that only the 'title' field is NOT marked as required
+			const titleField = firstItem.fields['title'] as SchemaFieldConfig;
+			expect(titleField.validations?.required).toBeUndefined(); // Not required
+
+			// Verify components field exists (it's an array, so it won't have 'required' validation)
+			const componentsField = firstItem.fields['components'];
+			expect(componentsField).toBeDefined();
+			expect(componentsField.type).toBe(SchemaFieldType.Array);
+		});
 	});
 
 	describe('removeArray', () => {
@@ -569,6 +605,39 @@ describe('SchemaFormService', () => {
 			const radioField = paymentGroup.fields['paymentMethod_oneOf'];
 
 			expect(radioField.conditionalSchemas?.length).toBe(2);
+		});
+
+		it('should mark fields as required when oneOf option with required array is selected', done => {
+			const rootGroup = service.schemaToFieldConfig(oneOfSchema);
+			const paymentMethodGroup = rootGroup.fields['paymentMethod'] as SchemaFieldGroup;
+			const radioField = paymentMethodGroup.fields[
+				'paymentMethod_oneOf'
+			] as SchemaFieldConfig;
+
+			// Simulate selecting the first option (Credit Card)
+			radioField.controlRef.setValue(0);
+
+			// Wait for the subscription to process
+			setTimeout(() => {
+				// After selection, the parent group should have the required fields from the selected option
+				expect(paymentMethodGroup.requiredFields).toContain('cardNumber');
+				expect(paymentMethodGroup.requiredFields).toContain('cvv');
+				expect(paymentMethodGroup.requiredFields).not.toContain('expiryDate');
+
+				// The fields should be marked as required
+				const cardNumberField = paymentMethodGroup.fields[
+					'cardNumber'
+				] as SchemaFieldConfig;
+				const cvvField = paymentMethodGroup.fields['cvv'] as SchemaFieldConfig;
+				const expiryDateField = paymentMethodGroup.fields[
+					'expiryDate'
+				] as SchemaFieldConfig;
+
+				expect(cardNumberField.validations?.required).toBe(true); // cardNumber is required
+				expect(cvvField.validations?.required).toBe(true); // cvv is required
+				expect(expiryDateField.validations?.required).toBeUndefined(); // expiryDate is not required
+				done();
+			}, 0);
 		});
 	});
 
