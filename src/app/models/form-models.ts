@@ -62,6 +62,7 @@ export interface SchemaFieldConfig extends BaseSchemaConfig {
 	options?: { label: string; value: any }[];
 	removeable?: boolean;
 	validations?: FieldValidations;
+	additionalProperties?: boolean;
 }
 
 export interface SchemaFieldGroup extends BaseSchemaConfig {

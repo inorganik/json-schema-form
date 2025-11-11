@@ -19,7 +19,8 @@
 		},
 		"params": {
 			"title": "Params",
-			"type": "object"
+			"type": "object",
+			"additionalProperties": true
 		}
 	},
 	"required": ["status", "title", "cost"],

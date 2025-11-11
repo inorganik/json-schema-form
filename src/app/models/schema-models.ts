@@ -50,7 +50,7 @@ export interface JsonSchema {
 	required?: string[];
 	properties?: { [key: string]: JsonSchema };
 	patternProperties?: { [pattern: string]: JsonSchema };
-	additionalProperties?: JsonSchema;
+	additionalProperties?: JsonSchema | boolean;
 	dependencies?: { [key: string]: JsonSchema | string[] };
 	propertyNames?: JsonSchema;
 

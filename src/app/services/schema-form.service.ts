@@ -32,6 +32,9 @@ export class SchemaFormService {
 	// Toggle debug property in field configs, enabling display of unique keys
 	private debug = false;
 
+	private anyOfKeySegment = 'anyOf-option';
+	private oneOfKeySegment = 'oneOf-option';
+
 	/**
 	 * Convenience method that consolidates service calls
 	 *
@@ -174,6 +177,372 @@ export class SchemaFormService {
 		this.processSchema(schema, rootGroup, 'root');
 
 		return rootGroup;
+	}
+
+	/**
+	 * Patches a value to a from group in a SchemaFieldGroup
+	 *
+	 * @param rootGroup - a schema field group
+	 * @param value - the form value to patch to the rootGroup form group
+	 */
+	patchValue(rootGroup: SchemaFieldGroup, value: any): void {
+		if (!value || typeof value !== 'object') {
+			return;
+		}
+
+		// First pass: prepare the structure (add array items, select oneOf/anyOf options)
+		this.prepareStructureForValue(rootGroup, value);
+		// Second pass: patch the values to the form controls
+		rootGroup.groupRef.patchValue(value);
+	}
+
+	/**
+	 * Recursively prepares the field structure for patching by adding array items
+	 * and selecting oneOf/anyOf options based on the value object
+	 *
+	 * @param fieldGroup - the field group to prepare
+	 * @param value - the value object to match against
+	 */
+	private prepareStructureForValue(fieldGroup: SchemaFieldGroup, value: any): void {
+		if (!value || typeof value !== 'object') {
+			return;
+		}
+
+		// Handle additionalProperties
+		if (fieldGroup.additionalProperties) {
+			this.addAdditionalPropertiesFromValue(fieldGroup, value);
+		}
+
+		// Iterate through the fields in the group
+		for (const [key, field] of Object.entries(fieldGroup.fields)) {
+			if (field.type === SchemaFieldType.Group) {
+				const group = field as SchemaFieldGroup;
+				// Check if this is a oneOf wrapper group
+				const oneOfRadioKey = Object.keys(group.fields).find(k =>
+					k.endsWith(this.oneOfKeySegment),
+				);
+				if (oneOfRadioKey) {
+					// This is a oneOf group, handle oneOf selection
+					this.selectOneOfOption(group, oneOfRadioKey, value);
+				}
+
+				// Check if this is an anyOf wrapper group
+				const anyOfCheckboxKeys = Object.keys(group.fields).filter(
+					k =>
+						k.includes(this.anyOfKeySegment) &&
+						group.fields[k].type === SchemaFieldType.Checkbox,
+				);
+				if (anyOfCheckboxKeys.length > 0) {
+					// This is an anyOf group, handle anyOf selection
+					this.selectAnyOfOptions(group, anyOfCheckboxKeys, value);
+				}
+
+				// Recursively prepare nested groups
+				if (value[key]) {
+					this.prepareStructureForValue(group, value[key]);
+				}
+			} else if (field.type === SchemaFieldType.Array) {
+				const array = field as SchemaFieldArray;
+				const arrayValue = value[key];
+
+				if (Array.isArray(arrayValue)) {
+					// Add items to match the array length in the value
+					while (array.items.length < arrayValue.length) {
+						this.addArrayItem(array);
+					}
+
+					// Recursively prepare each array item if it's a group
+					for (let i = 0; i < array.items.length; i++) {
+						const item = array.items[i];
+						if (item.type === SchemaFieldType.Group && arrayValue[i]) {
+							this.prepareStructureForValue(item as SchemaFieldGroup, arrayValue[i]);
+						}
+					}
+				}
+			} else if (field.type === SchemaFieldType.Radio && key.endsWith(this.oneOfKeySegment)) {
+				// This is a root-level oneOf radio field (not in a wrapper group)
+				this.selectOneOfOption(fieldGroup, key, value);
+			} else if (
+				field.type === SchemaFieldType.Checkbox &&
+				key.includes(this.anyOfKeySegment)
+			) {
+				// This is a root-level anyOf checkbox (not in a wrapper group)
+				// Collect all anyOf checkboxes at this level
+				const anyOfCheckboxKeys = Object.keys(fieldGroup.fields).filter(
+					k =>
+						k.includes(this.anyOfKeySegment) &&
+						fieldGroup.fields[k].type === SchemaFieldType.Checkbox,
+				);
+				this.selectAnyOfOptions(fieldGroup, anyOfCheckboxKeys, value);
+			} else {
+				// Check if this field has conditional schemas (if/then/else)
+				const fieldConfig = field as SchemaFieldConfig;
+				if (fieldConfig.conditionalSchemas && fieldConfig.conditionalSchemas.length > 0) {
+					// Check if the value has a value for this field
+					if (value[key] !== undefined) {
+						// Set the field value and trigger conditional schemas
+						this.handleIfThenElseForPatch(fieldConfig, value[key], fieldGroup, value);
+					}
+				}
+			}
+		}
+	}
+
+	/**
+	 * Handles if/then/else conditional schemas when patching values.
+	 * Triggers the handleConditionalSchemas method to add fields, then recursively prepares nested structures.
+	 *
+	 * @param field - the field with conditional schemas
+	 * @param fieldValue - the value for this specific field
+	 * @param parentGroup - the parent group containing this field
+	 * @param fullValue - the full value object (for nested field preparation)
+	 */
+	private handleIfThenElseForPatch(
+		field: SchemaFieldConfig,
+		fieldValue: any,
+		parentGroup: SchemaFieldGroup,
+		fullValue: any,
+	): void {
+		// Use the existing handleConditionalSchemas method to add the conditional fields
+		// This ensures consistency with the reactive behavior
+		this.handleConditionalSchemas(field, fieldValue, parentGroup);
+
+		// Find the matching conditional schema to recursively prepare nested structures
+		for (const conditionalSchema of field.conditionalSchemas) {
+			if (conditionalSchema.triggerValue === fieldValue && conditionalSchema.addedKeys) {
+				// Recursively prepare any nested structures in the added fields
+				for (const addedKey of conditionalSchema.addedKeys) {
+					const addedField = parentGroup.fields[addedKey];
+
+					if (addedField && addedField.type === SchemaFieldType.Group) {
+						const addedGroup = addedField as SchemaFieldGroup;
+
+						// Check if this is a oneOf wrapper group
+						const oneOfRadioKey = Object.keys(addedGroup.fields).find(k =>
+							k.endsWith(this.oneOfKeySegment),
+						);
+						if (oneOfRadioKey && fullValue[addedKey]) {
+							// Handle oneOf selection in the conditionally added group
+							this.selectOneOfOption(addedGroup, oneOfRadioKey, fullValue[addedKey]);
+						}
+
+						// Check if this is an anyOf wrapper group
+						const anyOfCheckboxKeys = Object.keys(addedGroup.fields).filter(
+							k =>
+								k.includes(this.anyOfKeySegment) &&
+								addedGroup.fields[k].type === SchemaFieldType.Checkbox,
+						);
+						if (anyOfCheckboxKeys.length > 0 && fullValue[addedKey]) {
+							// Handle anyOf selection in the conditionally added group
+							this.selectAnyOfOptions(
+								addedGroup,
+								anyOfCheckboxKeys,
+								fullValue[addedKey],
+							);
+						}
+
+						// Recursively prepare the group
+						if (fullValue[addedKey]) {
+							this.prepareStructureForValue(addedGroup, fullValue[addedKey]);
+						}
+					} else if (
+						addedField &&
+						addedField.type === SchemaFieldType.Array &&
+						fullValue[addedKey]
+					) {
+						// Handle arrays in conditionally added fields
+						const addedArray = addedField as SchemaFieldArray;
+						const arrayValue = fullValue[addedKey];
+
+						if (Array.isArray(arrayValue)) {
+							// Add items to match the array length in the value
+							while (addedArray.items.length < arrayValue.length) {
+								this.addArrayItem(addedArray);
+							}
+
+							// Recursively prepare each array item if it's a group
+							for (let i = 0; i < addedArray.items.length; i++) {
+								const item = addedArray.items[i];
+								if (item.type === SchemaFieldType.Group && arrayValue[i]) {
+									this.prepareStructureForValue(
+										item as SchemaFieldGroup,
+										arrayValue[i],
+									);
+								}
+							}
+						}
+					}
+				}
+				break;
+			}
+		}
+
+		// Set the field value after adding conditional fields
+		field.controlRef.setValue(fieldValue, { emitEvent: false });
+	}
+
+	/**
+	 * Adds fields for additional properties found in the value object that don't
+	 * already exist in the field group. Only handles simple key-value pairs.
+	 *
+	 * @param fieldGroup - the field group with additionalProperties enabled
+	 * @param value - the value object containing additional properties
+	 */
+	private addAdditionalPropertiesFromValue(fieldGroup: SchemaFieldGroup, value: any): void {
+		if (!value || typeof value !== 'object') {
+			return;
+		}
+
+		// Get all value keys that are not already in the field group
+		// Exclude special field keys that start with underscore
+		const existingKeys = Object.keys(fieldGroup.fields);
+		const valueKeys = Object.keys(value);
+
+		for (const key of valueKeys) {
+			if (existingKeys.includes(key) || key.startsWith('_')) {
+				continue;
+			}
+			// Skip arrays and objects - only handle simple key-value pairs
+			const valueType = typeof value[key];
+			if (Array.isArray(value[key]) || (valueType === 'object' && value[key] !== null)) {
+				continue;
+			}
+
+			// Determine the schema type based on the value
+			let schema: JsonSchema;
+			if (value[key] === null) {
+				schema = { type: 'string' };
+			} else if (valueType === 'number') {
+				schema = { type: 'number' };
+			} else {
+				schema = { type: 'string' };
+			}
+
+			this.addField(schema, fieldGroup, key, undefined, true);
+		}
+	}
+
+	/**
+	 * Selects the appropriate oneOf option based on the value object
+	 *
+	 * @param group - the field group containing the oneOf radio field
+	 * @param radioKey - the key of the radio field
+	 * @param value - the value object to match against
+	 */
+	private selectOneOfOption(group: SchemaFieldGroup, radioKey: string, value: any): void {
+		const radioField = group.fields[radioKey] as SchemaFieldConfig;
+		if (!radioField || !radioField.conditionalSchemas) {
+			return;
+		}
+
+		// Try to match the value against each oneOf schema
+		for (let i = 0; i < radioField.conditionalSchemas.length; i++) {
+			const conditionalSchema = radioField.conditionalSchemas[i];
+			if (this.valueMatchesSchema(value, conditionalSchema.schema)) {
+				// Set the radio control value to select this option
+				radioField.controlRef.setValue(i);
+
+				// Recursively prepare the conditionally added fields
+				if (conditionalSchema.addedKeys && conditionalSchema.addedKeys.length > 0) {
+					for (const addedKey of conditionalSchema.addedKeys) {
+						const addedField = group.fields[addedKey];
+						if (
+							addedField &&
+							addedField.type === SchemaFieldType.Group &&
+							value[addedKey]
+						) {
+							this.prepareStructureForValue(
+								addedField as SchemaFieldGroup,
+								value[addedKey],
+							);
+						}
+					}
+				}
+				break;
+			}
+		}
+	}
+
+	/**
+	 * Selects the appropriate anyOf options based on the value object
+	 *
+	 * @param group - the field group containing the anyOf checkbox fields
+	 * @param checkboxKeys - the keys of the checkbox fields
+	 * @param value - the value object to match against
+	 */
+	private selectAnyOfOptions(group: SchemaFieldGroup, checkboxKeys: string[], value: any): void {
+		for (const checkboxKey of checkboxKeys) {
+			const checkboxField = group.fields[checkboxKey] as SchemaFieldConfig;
+			if (
+				!checkboxField ||
+				!checkboxField.conditionalSchemas ||
+				checkboxField.conditionalSchemas.length === 0
+			) {
+				continue;
+			}
+
+			const conditionalSchema = checkboxField.conditionalSchemas[0];
+			if (this.valueMatchesSchema(value, conditionalSchema.schema)) {
+				// Set the checkbox control value to true
+				checkboxField.controlRef.setValue(true);
+
+				// Recursively prepare the conditionally added fields
+				if (conditionalSchema.addedKeys && conditionalSchema.addedKeys.length > 0) {
+					for (const addedKey of conditionalSchema.addedKeys) {
+						const addedField = group.fields[addedKey];
+						if (
+							addedField &&
+							addedField.type === SchemaFieldType.Group &&
+							value[addedKey]
+						) {
+							this.prepareStructureForValue(
+								addedField as SchemaFieldGroup,
+								value[addedKey],
+							);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	/**
+	 * Checks if a value object matches a JSON schema's structure
+	 * Used to determine which oneOf/anyOf option should be selected
+	 *
+	 * @param value - the value object to check
+	 * @param schema - the JSON schema to match against
+	 * @returns true if the value matches the schema structure
+	 */
+	private valueMatchesSchema(value: any, schema: JsonSchema): boolean {
+		if (!schema || !value || typeof value !== 'object') {
+			return false;
+		}
+
+		// Resolve $ref if present
+		if (schema.$ref) {
+			const resolvedSchema = this.resolveRef(schema.$ref);
+			if (resolvedSchema) {
+				return this.valueMatchesSchema(value, resolvedSchema);
+			}
+			return false;
+		}
+
+		// If schema has properties, check if value has any of those properties
+		if (schema.properties) {
+			const schemaKeys = Object.keys(schema.properties);
+			const valueKeys = Object.keys(value);
+			return schemaKeys.some(key => valueKeys.includes(key));
+		}
+
+		// If schema has a const value, check exact match
+		if (schema.const !== undefined) {
+			return value === schema.const;
+		}
+		if (schema.enum) {
+			return schema.enum.includes(value);
+		}
+		return true;
 	}
 
 	/**
@@ -380,7 +749,7 @@ export class SchemaFormService {
 			if (anyOfSchema.$ref) {
 				anyOfSchema = this.resolveRef(anyOfSchema.$ref);
 			}
-			const checkboxKey = `${baseKey}_option_${i + 1}`;
+			const checkboxKey = `${baseKey}_${this.anyOfKeySegment}_${i + 1}`;
 
 			// Create a control for the checkbox (not added to FormGroup)
 			const conditionalControl = new FormControl(false);
@@ -469,7 +838,7 @@ export class SchemaFormService {
 		// Create a control for the radio (not added to FormGroup)
 		const conditionalControl = new FormControl(null);
 
-		const radioKey = `${baseKey}_oneOf`;
+		const radioKey = `${baseKey}_${this.oneOfKeySegment}`;
 
 		// Parent is determined by if there is a key
 		const radioParent = fieldsetGroup || targetGroup;

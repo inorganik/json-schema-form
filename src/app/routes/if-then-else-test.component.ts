@@ -11,6 +11,7 @@ import { SchemaFormService } from '../services/schema-form.service';
 	template: `
 		<app-field-container [config]="groupConfig" />
 		<button type="button" (click)="handleFormSubmit()">Submit</button>
+		<button type="button" (click)="testPatchValue()">Test patch value</button>
 	`,
 })
 export class IfThenElseTestComponent implements OnInit {
@@ -28,5 +29,29 @@ export class IfThenElseTestComponent implements OnInit {
 	handleFormSubmit() {
 		console.log('valid', this.groupConfig.groupRef.valid);
 		console.log('form value', this.groupConfig.groupRef.value);
+	}
+
+	testPatchValue() {
+		const value = {
+			status: 'FLAG_CONTROLLED',
+			flags: {
+				and: [
+					{ productFlag: 'product-flag-1' },
+					{
+						ldFeatureFlag: {
+							name: 'ld-flag-2',
+							booleanEquals: true,
+						},
+					},
+				],
+			},
+			title: 'foo',
+			cost: 10,
+			params: {
+				foo: 'bar',
+				baz: 'qux',
+			},
+		};
+		this.schemaService.patchValue(this.groupConfig, value);
 	}
 }
