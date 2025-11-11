@@ -10,7 +10,7 @@ export enum SchemaFieldType {
 	Checkbox = 'checkbox',
 	Group = 'group',
 	Array = 'array',
-	Parameter = 'parameter',
+	AddProperty = 'add-property',
 	Toggle = 'toggle',
 	Hidden = 'hidden',
 }
@@ -70,6 +70,7 @@ export interface SchemaFieldGroup extends BaseSchemaConfig {
 	validations?: FieldValidations;
 	renderFieldset?: boolean;
 	requiredFields?: string[];
+	additionalProperties?: boolean;
 }
 
 export interface SchemaFieldArray extends BaseSchemaConfig {

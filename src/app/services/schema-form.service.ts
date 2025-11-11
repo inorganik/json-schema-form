@@ -560,39 +560,38 @@ export class SchemaFormService {
 			parentArray.arrayRef?.push(formGroup);
 		}
 
-		// Conditionally add parameter field for object schemas with no field props
-		const hasFieldProps = this.hasFieldProperties(schema);
-		if (!hasFieldProps) {
-			this.addParameter(fieldGroup);
-		}
-
 		// Process the schema recursively (handles properties, allOf, anyOf, oneOf, if/then/else)
 		this.processSchema(schema, fieldGroup);
+
+		// Include add parameter field for schema that allows additional properties
+		if (schema.additionalProperties) {
+			fieldGroup.additionalProperties = true;
+			this.addAddProperty(fieldGroup);
+		}
 	}
 
 	/**
-	 * Adds a parameter field to a field group. This is used for object types that have no
-	 * defined properties, allowing users to dynamically add fields with custom keys.
+	 * Adds an add property field to a field group to support additionalProperties
 	 */
-	addParameter(parent: SchemaFieldGroup): void {
-		// form control for the parameter key input (not added to parent group)
+	addAddProperty(parent: SchemaFieldGroup): void {
+		// form control for the property key input (not added to parent group)
 		const control = new FormControl('');
 
-		// Create the parameter field config
-		const parameterField: SchemaFieldConfig = {
-			label: 'Add parameter',
+		// Create the property field config
+		const addPropertyField: SchemaFieldConfig = {
+			label: 'Add Property',
 			controlRef: control,
-			description: 'Enter a key to add a custom parameter.',
-			key: '_add_parameter',
-			uniqueKey: `${parent.uniqueKey}_000_addParam`,
-			type: SchemaFieldType.Parameter,
+			description: 'Enter a key to add a custom property.',
+			key: '_add_property',
+			uniqueKey: `${parent.uniqueKey}_999_addProperty`,
+			type: SchemaFieldType.AddProperty,
 			parent,
 			conditionalSchemas: [],
 			debug: this.debug,
 		};
 
 		// Add to parent fields (but not to the FormGroup)
-		parent.fields['_add_parameter'] = parameterField;
+		parent.fields['_add_property'] = addPropertyField;
 	}
 
 	/**
@@ -1110,13 +1109,6 @@ export class SchemaFormService {
 		}
 
 		return addedKeys;
-	}
-
-	/**
-	 * Detects if a schema has props that should render fields
-	 */
-	hasFieldProperties(schema: JsonSchema): boolean {
-		return !!(schema.properties || schema.oneOf || schema.anyOf || schema.allOf || schema.if);
 	}
 
 	/**

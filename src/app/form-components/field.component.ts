@@ -41,7 +41,7 @@ import { TextInputFieldComponent } from './text-input-field.component';
 			@case (FieldType.Checkbox) {
 				<app-checkbox-field [config]="config" />
 			}
-			@case (FieldType.Parameter) {
+			@case (FieldType.AddProperty) {
 				<app-parameter-field [config]="config" />
 			}
 			@case (FieldType.Hidden) {
