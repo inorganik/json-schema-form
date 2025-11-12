@@ -269,6 +269,98 @@ export class SchemaFormService {
 	}
 
 	/**
+	 * Recursively prepare any nested structures in conditional schema added fields
+	 *
+	 * @param parentGroup
+	 * @param addedKeys
+	 * @param fullValue
+	 */
+	private handleConditionalSchemaForPatch(
+		parentGroup: SchemaFieldGroup,
+		addedKeys: string[],
+		fullValue: any,
+	) {
+		for (const addedKey of addedKeys) {
+			const addedField = parentGroup.fields[addedKey];
+
+			if (addedField && addedField.type === SchemaFieldType.Group) {
+				const addedGroup = addedField as SchemaFieldGroup;
+
+				// Check if this is a oneOf wrapper group
+				const oneOfRadioKey = Object.keys(addedGroup.fields).find(k =>
+					k.endsWith(this.oneOfKeySegment),
+				);
+				if (oneOfRadioKey && fullValue[addedKey]) {
+					// Handle oneOf selection in the conditionally added group
+					this.selectOneOfOption(addedGroup, oneOfRadioKey, fullValue[addedKey]);
+				}
+
+				// Check if this is an anyOf wrapper group
+				const anyOfCheckboxKeys = Object.keys(addedGroup.fields).filter(
+					k =>
+						k.includes(this.anyOfKeySegment) &&
+						addedGroup.fields[k].type === SchemaFieldType.Checkbox,
+				);
+				if (anyOfCheckboxKeys.length > 0 && fullValue[addedKey]) {
+					// Handle anyOf selection in the conditionally added group
+					this.selectAnyOfOptions(addedGroup, anyOfCheckboxKeys, fullValue[addedKey]);
+				}
+
+				// Recursively prepare the group
+				if (fullValue[addedKey]) {
+					this.prepareStructureForValue(addedGroup, fullValue[addedKey]);
+				}
+			} else if (
+				addedField &&
+				addedField.type === SchemaFieldType.Array &&
+				fullValue[addedKey]
+			) {
+				// Handle arrays in conditionally added fields
+				const addedArray = addedField as SchemaFieldArray;
+				const arrayValue = fullValue[addedKey];
+
+				if (Array.isArray(arrayValue)) {
+					// Add items to match the array length in the value
+					while (addedArray.items.length < arrayValue.length) {
+						this.addArrayItem(addedArray);
+					}
+
+					// Recursively prepare each array item if it's a group
+					for (let i = 0; i < addedArray.items.length; i++) {
+						const item = addedArray.items[i];
+						if (item.type === SchemaFieldType.Group && arrayValue[i]) {
+							this.prepareStructureForValue(item as SchemaFieldGroup, arrayValue[i]);
+						}
+					}
+				}
+			} else if (
+				addedField &&
+				addedField.type === SchemaFieldType.Radio &&
+				addedKey.endsWith(this.oneOfKeySegment)
+			) {
+				// This is a oneOf radio field added at the parent level (not in a wrapper group)
+				// Handle oneOf selection for this radio field
+				this.selectOneOfOption(parentGroup, addedKey, fullValue);
+			} else if (
+				addedField &&
+				addedField.type === SchemaFieldType.Checkbox &&
+				addedKey.includes(this.anyOfKeySegment)
+			) {
+				// This is an anyOf checkbox field added at the parent level
+				// Collect all related anyOf checkboxes
+				const anyOfCheckboxKeys = addedKeys.filter(
+					k =>
+						k.includes(this.anyOfKeySegment) &&
+						parentGroup.fields[k]?.type === SchemaFieldType.Checkbox,
+				);
+				if (anyOfCheckboxKeys.length > 0) {
+					this.selectAnyOfOptions(parentGroup, anyOfCheckboxKeys, fullValue);
+				}
+			}
+		}
+	}
+
+	/**
 	 * Handles if/then/else conditional schemas when patching values.
 	 * Triggers the handleConditionalSchemas method to add fields, then recursively prepares nested structures.
 	 *
@@ -290,139 +382,17 @@ export class SchemaFormService {
 		// Find the matching conditional schema to recursively prepare nested structures
 		for (const conditionalSchema of field.conditionalSchemas) {
 			if (conditionalSchema.triggerValue === fieldValue && conditionalSchema.addedKeys) {
-				// Recursively prepare any nested structures in the added fields
-				for (const addedKey of conditionalSchema.addedKeys) {
-					const addedField = parentGroup.fields[addedKey];
-
-					if (addedField && addedField.type === SchemaFieldType.Group) {
-						const addedGroup = addedField as SchemaFieldGroup;
-
-						// Check if this is a oneOf wrapper group
-						const oneOfRadioKey = Object.keys(addedGroup.fields).find(k =>
-							k.endsWith(this.oneOfKeySegment),
-						);
-						if (oneOfRadioKey && fullValue[addedKey]) {
-							// Handle oneOf selection in the conditionally added group
-							this.selectOneOfOption(addedGroup, oneOfRadioKey, fullValue[addedKey]);
-						}
-
-						// Check if this is an anyOf wrapper group
-						const anyOfCheckboxKeys = Object.keys(addedGroup.fields).filter(
-							k =>
-								k.includes(this.anyOfKeySegment) &&
-								addedGroup.fields[k].type === SchemaFieldType.Checkbox,
-						);
-						if (anyOfCheckboxKeys.length > 0 && fullValue[addedKey]) {
-							// Handle anyOf selection in the conditionally added group
-							this.selectAnyOfOptions(
-								addedGroup,
-								anyOfCheckboxKeys,
-								fullValue[addedKey],
-							);
-						}
-
-						// Recursively prepare the group
-						if (fullValue[addedKey]) {
-							this.prepareStructureForValue(addedGroup, fullValue[addedKey]);
-						}
-					} else if (
-						addedField &&
-						addedField.type === SchemaFieldType.Array &&
-						fullValue[addedKey]
-					) {
-						// Handle arrays in conditionally added fields
-						const addedArray = addedField as SchemaFieldArray;
-						const arrayValue = fullValue[addedKey];
-
-						if (Array.isArray(arrayValue)) {
-							// Add items to match the array length in the value
-							while (addedArray.items.length < arrayValue.length) {
-								this.addArrayItem(addedArray);
-							}
-
-							// Recursively prepare each array item if it's a group
-							for (let i = 0; i < addedArray.items.length; i++) {
-								const item = addedArray.items[i];
-								if (item.type === SchemaFieldType.Group && arrayValue[i]) {
-									this.prepareStructureForValue(
-										item as SchemaFieldGroup,
-										arrayValue[i],
-									);
-								}
-							}
-						}
-					} else if (
-						addedField &&
-						addedField.type === SchemaFieldType.Radio &&
-						addedKey.endsWith(this.oneOfKeySegment)
-					) {
-						// This is a oneOf radio field added at the parent level (not in a wrapper group)
-						// Handle oneOf selection for this radio field
-						this.selectOneOfOption(parentGroup, addedKey, fullValue);
-					} else if (
-						addedField &&
-						addedField.type === SchemaFieldType.Checkbox &&
-						addedKey.includes(this.anyOfKeySegment)
-					) {
-						// This is an anyOf checkbox field added at the parent level
-						// Collect all related anyOf checkboxes
-						const anyOfCheckboxKeys = conditionalSchema.addedKeys.filter(
-							k =>
-								k.includes(this.anyOfKeySegment) &&
-								parentGroup.fields[k]?.type === SchemaFieldType.Checkbox,
-						);
-						if (anyOfCheckboxKeys.length > 0) {
-							this.selectAnyOfOptions(parentGroup, anyOfCheckboxKeys, fullValue);
-						}
-					}
-				}
+				this.handleConditionalSchemaForPatch(
+					parentGroup,
+					conditionalSchema.addedKeys,
+					fullValue,
+				);
 				break;
 			}
 		}
 
 		// Set the field value after adding conditional fields
 		field.controlRef.setValue(fieldValue, { emitEvent: false });
-	}
-
-	/**
-	 * Adds fields for additional properties found in the value object that don't
-	 * already exist in the field group. Only handles simple key-value pairs.
-	 *
-	 * @param fieldGroup - the field group with additionalProperties enabled
-	 * @param value - the value object containing additional properties
-	 */
-	private addAdditionalPropertiesFromValue(fieldGroup: SchemaFieldGroup, value: any): void {
-		if (!value || typeof value !== 'object') {
-			return;
-		}
-
-		// Get all value keys that are not already in the field group
-		// Exclude special field keys that start with underscore
-		const existingKeys = Object.keys(fieldGroup.fields);
-		const valueKeys = Object.keys(value);
-
-		for (const key of valueKeys) {
-			if (existingKeys.includes(key) || key.startsWith('_')) {
-				continue;
-			}
-			// Skip arrays and objects - only handle simple key-value pairs
-			const valueType = typeof value[key];
-			if (Array.isArray(value[key]) || (valueType === 'object' && value[key] !== null)) {
-				continue;
-			}
-
-			// Determine the schema type based on the value
-			let schema: JsonSchema;
-			if (value[key] === null) {
-				schema = { type: 'string' };
-			} else if (valueType === 'number') {
-				schema = { type: 'number' };
-			} else {
-				schema = { type: 'string' };
-			}
-
-			this.addField(schema, fieldGroup, key, undefined, true);
-		}
 	}
 
 	/**
@@ -437,13 +407,10 @@ export class SchemaFormService {
 		if (!radioField || !radioField.conditionalSchemas) {
 			return;
 		}
-
 		// Try to match the value against each oneOf schema
 		for (const conditionalSchema of radioField.conditionalSchemas) {
 			if (this.valueMatchesSchema(value, conditionalSchema.schema)) {
 				const schemaId = conditionalSchema.triggerValue;
-
-				// Manually trigger handleConditionalSchemas to add fields BEFORE setting value
 				this.handleConditionalSchemas(radioField, schemaId, group);
 
 				// Set the radio control value to the stable ID
@@ -451,45 +418,7 @@ export class SchemaFormService {
 
 				// Recursively prepare the conditionally added fields
 				if (conditionalSchema.addedKeys && conditionalSchema.addedKeys.length > 0) {
-					for (const addedKey of conditionalSchema.addedKeys) {
-						const addedField = group.fields[addedKey];
-						if (
-							addedField &&
-							addedField.type === SchemaFieldType.Group &&
-							value[addedKey]
-						) {
-							this.prepareStructureForValue(
-								addedField as SchemaFieldGroup,
-								value[addedKey],
-							);
-						} else if (
-							addedField &&
-							addedField.type === SchemaFieldType.Array &&
-							value[addedKey]
-						) {
-							// Handle arrays in conditionally added fields
-							const addedArray = addedField as SchemaFieldArray;
-							const arrayValue = value[addedKey];
-
-							if (Array.isArray(arrayValue)) {
-								// Add items to match the array length in the value
-								while (addedArray.items.length < arrayValue.length) {
-									this.addArrayItem(addedArray);
-								}
-
-								// Recursively prepare each array item if it's a group
-								for (let i = 0; i < addedArray.items.length; i++) {
-									const item = addedArray.items[i];
-									if (item.type === SchemaFieldType.Group && arrayValue[i]) {
-										this.prepareStructureForValue(
-											item as SchemaFieldGroup,
-											arrayValue[i],
-										);
-									}
-								}
-							}
-						}
-					}
+					this.handleConditionalSchemaForPatch(group, conditionalSchema.addedKeys, value);
 				}
 				break;
 			}
@@ -516,52 +445,13 @@ export class SchemaFormService {
 
 			const conditionalSchema = checkboxField.conditionalSchemas[0];
 			if (this.valueMatchesSchema(value, conditionalSchema.schema)) {
-				// Manually trigger handleConditionalSchemas to add fields BEFORE setting value
 				this.handleConditionalSchemas(checkboxField, true, group);
 
 				checkboxField.controlRef.setValue(true, { emitEvent: false });
 
 				// Recursively prepare the conditionally added fields
 				if (conditionalSchema.addedKeys && conditionalSchema.addedKeys.length > 0) {
-					for (const addedKey of conditionalSchema.addedKeys) {
-						const addedField = group.fields[addedKey];
-						if (
-							addedField &&
-							addedField.type === SchemaFieldType.Group &&
-							value[addedKey]
-						) {
-							this.prepareStructureForValue(
-								addedField as SchemaFieldGroup,
-								value[addedKey],
-							);
-						} else if (
-							addedField &&
-							addedField.type === SchemaFieldType.Array &&
-							value[addedKey]
-						) {
-							// Handle arrays in conditionally added fields
-							const addedArray = addedField as SchemaFieldArray;
-							const arrayValue = value[addedKey];
-
-							if (Array.isArray(arrayValue)) {
-								// Add items to match the array length in the value
-								while (addedArray.items.length < arrayValue.length) {
-									this.addArrayItem(addedArray);
-								}
-
-								// Recursively prepare each array item if it's a group
-								for (let i = 0; i < addedArray.items.length; i++) {
-									const item = addedArray.items[i];
-									if (item.type === SchemaFieldType.Group && arrayValue[i]) {
-										this.prepareStructureForValue(
-											item as SchemaFieldGroup,
-											arrayValue[i],
-										);
-									}
-								}
-							}
-						}
-					}
+					this.handleConditionalSchemaForPatch(group, conditionalSchema.addedKeys, value);
 				}
 			}
 		}
@@ -628,6 +518,47 @@ export class SchemaFormService {
 			return schema.enum.includes(value);
 		}
 		return true;
+	}
+
+	/**
+	 * Adds fields for additional properties found in the value object that don't
+	 * already exist in the field group. Only handles simple key-value pairs.
+	 *
+	 * @param fieldGroup - the field group with additionalProperties enabled
+	 * @param value - the value object containing additional properties
+	 */
+	private addAdditionalPropertiesFromValue(fieldGroup: SchemaFieldGroup, value: any): void {
+		if (!value || typeof value !== 'object') {
+			return;
+		}
+
+		// Get all value keys that are not already in the field group
+		// Exclude special field keys that start with underscore
+		const existingKeys = Object.keys(fieldGroup.fields);
+		const valueKeys = Object.keys(value);
+
+		for (const key of valueKeys) {
+			if (existingKeys.includes(key) || key.startsWith('_')) {
+				continue;
+			}
+			// Skip arrays and objects - only handle simple key-value pairs
+			const valueType = typeof value[key];
+			if (Array.isArray(value[key]) || (valueType === 'object' && value[key] !== null)) {
+				continue;
+			}
+
+			// Determine the schema type based on the value
+			let schema: JsonSchema;
+			if (value[key] === null) {
+				schema = { type: 'string' };
+			} else if (valueType === 'number') {
+				schema = { type: 'number' };
+			} else {
+				schema = { type: 'string' };
+			}
+
+			this.addField(schema, fieldGroup, key, undefined, true);
+		}
 	}
 
 	/**
