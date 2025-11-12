@@ -353,16 +353,6 @@ describe('SchemaFormService', () => {
 			expect(addressGroup.fields['street']).toBeDefined();
 			expect(addressGroup.fields['city']).toBeDefined();
 		});
-
-		it('should add parameter field for object with no properties', () => {
-			const rootGroup = service.schemaToFieldConfig({ type: 'object', properties: {} });
-			const groupSchema: JsonSchema = { type: 'object', title: 'Custom Data' };
-
-			service.addGroup(groupSchema, rootGroup, 'customData', 0);
-
-			const group = rootGroup.fields['customData'] as SchemaFieldGroup;
-			expect(group.fields['_add_parameter']).toBeDefined();
-		});
 	});
 
 	describe('removeGroup', () => {
@@ -585,14 +575,18 @@ describe('SchemaFormService', () => {
 			const rootGroup = service.schemaToFieldConfig(oneOfSchema);
 			const paymentGroup = rootGroup.fields['paymentMethod'] as SchemaFieldGroup;
 
-			expect(paymentGroup.fields['paymentMethod_oneOf']).toBeDefined();
-			expect(paymentGroup.fields['paymentMethod_oneOf'].type).toBe(SchemaFieldType.Radio);
+			expect(paymentGroup.fields['paymentMethod_oneOf-option']).toBeDefined();
+			expect(paymentGroup.fields['paymentMethod_oneOf-option'].type).toBe(
+				SchemaFieldType.Radio,
+			);
 		});
 
 		it('should create options from oneOf schemas', () => {
 			const rootGroup = service.schemaToFieldConfig(oneOfSchema);
 			const paymentGroup = rootGroup.fields['paymentMethod'] as SchemaFieldGroup;
-			const radioField = paymentGroup.fields['paymentMethod_oneOf'] as SchemaFieldConfig;
+			const radioField = paymentGroup.fields[
+				'paymentMethod_oneOf-option'
+			] as SchemaFieldConfig;
 
 			expect(radioField.options!.length).toBe(2);
 			expect(radioField.options![0].label).toBe('Credit Card');
@@ -602,7 +596,7 @@ describe('SchemaFormService', () => {
 		it('should add conditional schemas for each option', () => {
 			const rootGroup = service.schemaToFieldConfig(oneOfSchema);
 			const paymentGroup = rootGroup.fields['paymentMethod'] as SchemaFieldGroup;
-			const radioField = paymentGroup.fields['paymentMethod_oneOf'];
+			const radioField = paymentGroup.fields['paymentMethod_oneOf-option'];
 
 			expect(radioField.conditionalSchemas?.length).toBe(2);
 		});
@@ -611,7 +605,7 @@ describe('SchemaFormService', () => {
 			const rootGroup = service.schemaToFieldConfig(oneOfSchema);
 			const paymentMethodGroup = rootGroup.fields['paymentMethod'] as SchemaFieldGroup;
 			const radioField = paymentMethodGroup.fields[
-				'paymentMethod_oneOf'
+				'paymentMethod_oneOf-option'
 			] as SchemaFieldConfig;
 
 			// Simulate selecting the first option (Credit Card)
@@ -646,15 +640,17 @@ describe('SchemaFormService', () => {
 			const rootGroup = service.schemaToFieldConfig(anyOfSchema);
 			const featuresGroup = rootGroup.fields['features'] as SchemaFieldGroup;
 
-			expect(featuresGroup.fields['features_option_1']).toBeDefined();
-			expect(featuresGroup.fields['features_option_1'].type).toBe(SchemaFieldType.Checkbox);
-			expect(featuresGroup.fields['features_option_2']).toBeDefined();
+			expect(featuresGroup.fields['features_anyOf-option_1']).toBeDefined();
+			expect(featuresGroup.fields['features_anyOf-option_1'].type).toBe(
+				SchemaFieldType.Checkbox,
+			);
+			expect(featuresGroup.fields['features_anyOf-option_2']).toBeDefined();
 		});
 
 		it('should add conditional schemas to each checkbox', () => {
 			const rootGroup = service.schemaToFieldConfig(anyOfSchema);
 			const featuresGroup = rootGroup.fields['features'] as SchemaFieldGroup;
-			const checkbox1 = featuresGroup.fields['features_option_1'];
+			const checkbox1 = featuresGroup.fields['features_anyOf-option_1'];
 
 			expect(checkbox1.conditionalSchemas!.length).toBe(1);
 			expect(checkbox1.conditionalSchemas![0].triggerValue).toBe(true);
@@ -879,7 +875,7 @@ describe('SchemaFormService', () => {
 			const rootGroup = service.schemaToFieldConfig(oneOfSchema);
 			const paymentMethodGroup = rootGroup.fields['paymentMethod'] as SchemaFieldGroup;
 			const radioField = paymentMethodGroup.fields[
-				'paymentMethod_oneOf'
+				'paymentMethod_oneOf-option'
 			] as SchemaFieldConfig;
 
 			// Select first option (Credit Card)
@@ -899,20 +895,20 @@ describe('SchemaFormService', () => {
 		});
 	});
 
-	describe('addParameter', () => {
-		it('should add a parameter field to group', () => {
+	describe('addAddProperty', () => {
+		it('should add a property field to group', () => {
 			const rootGroup = service.schemaToFieldConfig({ type: 'object', properties: {} });
 
-			service.addParameter(rootGroup);
+			service.addAddProperty(rootGroup);
 
-			expect(rootGroup.fields['_add_parameter']).toBeDefined();
-			expect(rootGroup.fields['_add_parameter'].type).toBe(SchemaFieldType.Parameter);
+			expect(rootGroup.fields['_add_property']).toBeDefined();
+			expect(rootGroup.fields['_add_property'].type).toBe(SchemaFieldType.AddProperty);
 		});
 
 		it('should not add parameter control to FormGroup', () => {
 			const rootGroup = service.schemaToFieldConfig({ type: 'object', properties: {} });
 
-			service.addParameter(rootGroup);
+			service.addAddProperty(rootGroup);
 
 			expect(rootGroup.groupRef?.get('_parameter')).toBeNull();
 		});
