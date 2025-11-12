@@ -589,9 +589,33 @@ export class SchemaFormService {
 			return false;
 		}
 
-		// If schema has properties, check if value has any of those properties
+		// Check for discriminator - a required property with a specific const value
+		// that uniquely identifies which oneOf option to use
 		if (schema.properties) {
 			const schemaKeys = Object.keys(schema.properties);
+
+			// First pass: look for discriminator properties
+			for (const key of schemaKeys) {
+				const propSchema = schema.properties[key];
+
+				// Check if this property has a const value (discriminator)
+				if (propSchema.const !== undefined) {
+					return value[key] === propSchema.const;
+				}
+			}
+
+			// Second pass: check if value has required properties from schema
+			if (schema.required && schema.required.length > 0) {
+				const hasAllRequired = schema.required.every(key => key in value);
+				if (!hasAllRequired) {
+					return false;
+				}
+
+				// If all required properties exist, this is likely a match
+				return true;
+			}
+
+			// Fallback: if no required fields, check if value has ANY of the schema properties
 			const valueKeys = Object.keys(value);
 			return schemaKeys.some(key => valueKeys.includes(key));
 		}
