@@ -481,6 +481,32 @@ export class SchemaFormService {
 								addedField as SchemaFieldGroup,
 								value[addedKey],
 							);
+						} else if (
+							addedField &&
+							addedField.type === SchemaFieldType.Array &&
+							value[addedKey]
+						) {
+							// Handle arrays in conditionally added fields
+							const addedArray = addedField as SchemaFieldArray;
+							const arrayValue = value[addedKey];
+
+							if (Array.isArray(arrayValue)) {
+								// Add items to match the array length in the value
+								while (addedArray.items.length < arrayValue.length) {
+									this.addArrayItem(addedArray);
+								}
+
+								// Recursively prepare each array item if it's a group
+								for (let i = 0; i < addedArray.items.length; i++) {
+									const item = addedArray.items[i];
+									if (item.type === SchemaFieldType.Group && arrayValue[i]) {
+										this.prepareStructureForValue(
+											item as SchemaFieldGroup,
+											arrayValue[i],
+										);
+									}
+								}
+							}
 						}
 					}
 				}
@@ -527,6 +553,32 @@ export class SchemaFormService {
 								addedField as SchemaFieldGroup,
 								value[addedKey],
 							);
+						} else if (
+							addedField &&
+							addedField.type === SchemaFieldType.Array &&
+							value[addedKey]
+						) {
+							// Handle arrays in conditionally added fields
+							const addedArray = addedField as SchemaFieldArray;
+							const arrayValue = value[addedKey];
+
+							if (Array.isArray(arrayValue)) {
+								// Add items to match the array length in the value
+								while (addedArray.items.length < arrayValue.length) {
+									this.addArrayItem(addedArray);
+								}
+
+								// Recursively prepare each array item if it's a group
+								for (let i = 0; i < addedArray.items.length; i++) {
+									const item = addedArray.items[i];
+									if (item.type === SchemaFieldType.Group && arrayValue[i]) {
+										this.prepareStructureForValue(
+											item as SchemaFieldGroup,
+											arrayValue[i],
+										);
+									}
+								}
+							}
 						}
 					}
 				}

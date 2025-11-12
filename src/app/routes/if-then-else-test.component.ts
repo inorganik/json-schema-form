@@ -36,12 +36,14 @@ export class IfThenElseTestComponent implements OnInit {
 			status: 'FLAG_CONTROLLED',
 			flags: {
 				and: [
-					{ productFlag: 'product-flag-1' },
 					{
 						ldFeatureFlag: {
 							name: 'ld-flag-2',
 							booleanEquals: true,
 						},
+					},
+					{
+						or: [{ productFlag: 'prod-1' }, { productFlag: 'prod-2' }],
 					},
 				],
 			},
