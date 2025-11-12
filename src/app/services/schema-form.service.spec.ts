@@ -176,6 +176,119 @@ describe('SchemaFormService', () => {
 		});
 	});
 
+	describe('patchValue', () => {
+		it('should call prepareStructureForValue and patchValue on the form group', () => {
+			const rootGroup = service.schemaToFieldConfig(simpleSchema);
+			const value = { name: 'John', age: 30 };
+
+			jest.spyOn(service as any, 'prepareStructureForValue');
+			jest.spyOn(rootGroup.groupRef, 'patchValue');
+
+			service.patchValue(rootGroup, value);
+
+			expect((service as any).prepareStructureForValue).toHaveBeenCalledWith(
+				rootGroup,
+				value,
+			);
+			expect(rootGroup.groupRef.patchValue).toHaveBeenCalledWith(value);
+		});
+
+		describe('prepareStructureForValue', () => {
+			it('should return early if value is null or undefined', () => {
+				const rootGroup = service.schemaToFieldConfig(simpleSchema);
+				jest.spyOn(service as any, 'addAdditionalPropertiesFromValue');
+				(service as any).prepareStructureForValue(rootGroup, null);
+
+				expect((service as any).addAdditionalPropertiesFromValue).not.toHaveBeenCalled();
+			});
+
+			it('should return early if value is not an object', () => {
+				const rootGroup = service.schemaToFieldConfig(simpleSchema);
+				jest.spyOn(service as any, 'addAdditionalPropertiesFromValue');
+				(service as any).prepareStructureForValue(rootGroup, 'string');
+
+				expect((service as any).addAdditionalPropertiesFromValue).not.toHaveBeenCalled();
+			});
+
+			it('should add array items to match the value array length', () => {
+				const rootGroup = service.schemaToFieldConfig(arraySchema);
+				const array = rootGroup.fields['tags'] as SchemaFieldArray;
+				const value = { tags: ['tag1', 'tag2', 'tag3'] };
+				expect(array.items.length).toBe(1); // minItems: 1
+				(service as any).prepareStructureForValue(rootGroup, value);
+
+				expect(array.items.length).toBe(3);
+			});
+
+			it('should recursively prepare nested groups in arrays', () => {
+				const rootGroup = service.schemaToFieldConfig(arrayOfObjectsSchema);
+				const array = rootGroup.fields['addresses'] as SchemaFieldArray;
+				const value = {
+					addresses: [{ street: '123 Main St', city: 'NYC' }],
+				};
+				jest.spyOn(service as any, 'prepareStructureForValue');
+				(service as any).prepareStructureForValue(rootGroup, value);
+
+				expect(array.items.length).toBe(1);
+				// Should be called recursively for the nested group
+				expect((service as any).prepareStructureForValue).toHaveBeenCalledTimes(2);
+			});
+
+			it('should select oneOf option based on value', () => {
+				const rootGroup = service.schemaToFieldConfig(oneOfSchema);
+				const value = {
+					paymentMethod: {
+						cardNumber: '1234-5678',
+						cvv: '123',
+					},
+				};
+				jest.spyOn(service as any, 'selectOneOfOption');
+				(service as any).prepareStructureForValue(rootGroup, value);
+
+				expect((service as any).selectOneOfOption).toHaveBeenCalled();
+			});
+
+			it('should select anyOf options based on value', () => {
+				const rootGroup = service.schemaToFieldConfig(anyOfSchema);
+				const value = {
+					features: {
+						optionA: 'value A',
+					},
+				};
+				jest.spyOn(service as any, 'selectAnyOfOptions');
+				(service as any).prepareStructureForValue(rootGroup, value);
+
+				expect((service as any).selectAnyOfOptions).toHaveBeenCalled();
+			});
+
+			it('should handle if/then/else conditional schemas', () => {
+				const rootGroup = service.schemaToFieldConfig(ifThenElseSchema);
+				const value = {
+					country: 'USA',
+				};
+				jest.spyOn(service as any, 'handleIfThenElseForPatch');
+				(service as any).prepareStructureForValue(rootGroup, value);
+
+				expect((service as any).handleIfThenElseForPatch).toHaveBeenCalled();
+			});
+
+			it('should recursively prepare nested groups', () => {
+				const rootGroup = service.schemaToFieldConfig(nestedSchema);
+				const value = {
+					user: {
+						firstName: 'John',
+						lastName: 'Doe',
+					},
+				};
+				const spy = jest.spyOn(service as any, 'prepareStructureForValue');
+				(service as any).prepareStructureForValue(rootGroup, value);
+
+				// Should be called for root and nested group
+				expect(spy).toHaveBeenCalledTimes(2);
+			});
+		});
+	});
+
 	describe('addField', () => {
 		it('should add a text field to parent group', () => {
 			const rootGroup = service.schemaToFieldConfig({ type: 'object', properties: {} });

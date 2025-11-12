@@ -371,6 +371,29 @@ export class SchemaFormService {
 								}
 							}
 						}
+					} else if (
+						addedField &&
+						addedField.type === SchemaFieldType.Radio &&
+						addedKey.endsWith(this.oneOfKeySegment)
+					) {
+						// This is a oneOf radio field added at the parent level (not in a wrapper group)
+						// Handle oneOf selection for this radio field
+						this.selectOneOfOption(parentGroup, addedKey, fullValue);
+					} else if (
+						addedField &&
+						addedField.type === SchemaFieldType.Checkbox &&
+						addedKey.includes(this.anyOfKeySegment)
+					) {
+						// This is an anyOf checkbox field added at the parent level
+						// Collect all related anyOf checkboxes
+						const anyOfCheckboxKeys = conditionalSchema.addedKeys.filter(
+							k =>
+								k.includes(this.anyOfKeySegment) &&
+								parentGroup.fields[k]?.type === SchemaFieldType.Checkbox,
+						);
+						if (anyOfCheckboxKeys.length > 0) {
+							this.selectAnyOfOptions(parentGroup, anyOfCheckboxKeys, fullValue);
+						}
 					}
 				}
 				break;
@@ -439,8 +462,11 @@ export class SchemaFormService {
 		for (let i = 0; i < radioField.conditionalSchemas.length; i++) {
 			const conditionalSchema = radioField.conditionalSchemas[i];
 			if (this.valueMatchesSchema(value, conditionalSchema.schema)) {
+				// Manually trigger handleConditionalSchemas to add fields BEFORE setting value
+				this.handleConditionalSchemas(radioField, i, group);
+
 				// Set the radio control value to select this option
-				radioField.controlRef.setValue(i);
+				radioField.controlRef.setValue(i, { emitEvent: false });
 
 				// Recursively prepare the conditionally added fields
 				if (conditionalSchema.addedKeys && conditionalSchema.addedKeys.length > 0) {
@@ -483,8 +509,10 @@ export class SchemaFormService {
 
 			const conditionalSchema = checkboxField.conditionalSchemas[0];
 			if (this.valueMatchesSchema(value, conditionalSchema.schema)) {
-				// Set the checkbox control value to true
-				checkboxField.controlRef.setValue(true);
+				// Manually trigger handleConditionalSchemas to add fields BEFORE setting value
+				this.handleConditionalSchemas(checkboxField, true, group);
+
+				checkboxField.controlRef.setValue(true, { emitEvent: false });
 
 				// Recursively prepare the conditionally added fields
 				if (conditionalSchema.addedKeys && conditionalSchema.addedKeys.length > 0) {
