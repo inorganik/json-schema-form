@@ -10,6 +10,7 @@ import { SchemaFormService } from '../services/schema-form.service';
 	providers: [SchemaFormService],
 	template: `
 		<app-field-container [config]="groupConfig" />
+		<button type="button" (click)="groupConfig?.groupRef.reset()">Clear</button>
 		<button type="button" (click)="handleFormSubmit()">Submit</button>
 		<button type="button" (click)="testPatchValue()">Test patch value</button>
 	`,
@@ -54,6 +55,15 @@ export class IfThenElseTestComponent implements OnInit {
 				baz: 'qux',
 			},
 		};
-		this.schemaService.patchValue(this.groupConfig, value);
+		const value2 = {
+			status: 'FLAG_CONTROLLED',
+			flags: {
+				ldFeatureFlag: {
+					name: 'ld-flag-2',
+					booleanEquals: true,
+				},
+			},
+		};
+		this.schemaService.patchValue(this.groupConfig, value2);
 	}
 }

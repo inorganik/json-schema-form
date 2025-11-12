@@ -286,6 +286,96 @@ describe('SchemaFormService', () => {
 				// Should be called for root and nested group
 				expect(spy).toHaveBeenCalledTimes(2);
 			});
+
+			it('should select correct oneOf option for conditionally added field', () => {
+				const rootGroup = service.schemaToFieldConfig(ifThenElseSchema);
+				const value = {
+					country: 'USA',
+					state: 'CA',
+				};
+				service.patchValue(rootGroup, value);
+
+				// The state field should be added by the if/then conditional
+				expect(rootGroup.fields['state']).toBeDefined();
+				// The state field control should have the value patched
+				const stateField = rootGroup.fields['state'] as SchemaFieldConfig;
+				expect(stateField.controlRef.value).toBe('CA');
+			});
+
+			it('should select correct oneOf option when patching nested oneOf in conditional fields', () => {
+				// Create a schema with if/then that adds a oneOf field
+				const schema: JsonSchema = {
+					type: 'object',
+					properties: {
+						status: {
+							type: 'string',
+							enum: ['FLAG_CONTROLLED', 'ENABLED'],
+						},
+					},
+					allOf: [
+						{
+							if: {
+								properties: {
+									status: {
+										const: 'FLAG_CONTROLLED',
+									},
+								},
+							},
+							then: {
+								properties: {
+									flags: {
+										oneOf: [
+											{
+												title: 'Product flag',
+												properties: {
+													productFlag: {
+														type: 'string',
+													},
+												},
+												required: ['productFlag'],
+											},
+											{
+												title: 'Feature flag',
+												properties: {
+													featureFlag: {
+														type: 'string',
+													},
+												},
+												required: ['featureFlag'],
+											},
+										],
+									},
+								},
+								required: ['flags'],
+							},
+						},
+					],
+				};
+
+				const rootGroup = service.schemaToFieldConfig(schema);
+
+				const value = {
+					status: 'FLAG_CONTROLLED',
+					flags: {
+						featureFlag: 'test-flag',
+					},
+				};
+				service.patchValue(rootGroup, value);
+
+				expect(rootGroup.fields['flags']).toBeDefined();
+
+				const flagsGroup = rootGroup.fields['flags'] as SchemaFieldGroup;
+				const radioKey = Object.keys(flagsGroup.fields).find(k =>
+					k.endsWith('oneOf-option'),
+				);
+				expect(radioKey).toBeDefined();
+
+				if (radioKey) {
+					const radioField = flagsGroup.fields[radioKey] as SchemaFieldConfig;
+					expect(radioField.controlRef.value).toBe('feature_flag');
+					expect(flagsGroup.fields['featureFlag']).toBeDefined();
+				}
+			});
 		});
 	});
 
@@ -721,8 +811,8 @@ describe('SchemaFormService', () => {
 				'paymentMethod_oneOf-option'
 			] as SchemaFieldConfig;
 
-			// Simulate selecting the first option (Credit Card)
-			radioField.controlRef.setValue(0);
+			// Simulate selecting the first option (Credit Card) using stable ID
+			radioField.controlRef.setValue('credit_card');
 
 			// Wait for the subscription to process
 			setTimeout(() => {

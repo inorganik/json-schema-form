@@ -217,26 +217,6 @@ export class SchemaFormService {
 		for (const [key, field] of Object.entries(fieldGroup.fields)) {
 			if (field.type === SchemaFieldType.Group) {
 				const group = field as SchemaFieldGroup;
-				// Check if this is a oneOf wrapper group
-				const oneOfRadioKey = Object.keys(group.fields).find(k =>
-					k.endsWith(this.oneOfKeySegment),
-				);
-				if (oneOfRadioKey) {
-					// This is a oneOf group, handle oneOf selection
-					this.selectOneOfOption(group, oneOfRadioKey, value);
-				}
-
-				// Check if this is an anyOf wrapper group
-				const anyOfCheckboxKeys = Object.keys(group.fields).filter(
-					k =>
-						k.includes(this.anyOfKeySegment) &&
-						group.fields[k].type === SchemaFieldType.Checkbox,
-				);
-				if (anyOfCheckboxKeys.length > 0) {
-					// This is an anyOf group, handle anyOf selection
-					this.selectAnyOfOptions(group, anyOfCheckboxKeys, value);
-				}
-
 				// Recursively prepare nested groups
 				if (value[key]) {
 					this.prepareStructureForValue(group, value[key]);
@@ -459,14 +439,15 @@ export class SchemaFormService {
 		}
 
 		// Try to match the value against each oneOf schema
-		for (let i = 0; i < radioField.conditionalSchemas.length; i++) {
-			const conditionalSchema = radioField.conditionalSchemas[i];
+		for (const conditionalSchema of radioField.conditionalSchemas) {
 			if (this.valueMatchesSchema(value, conditionalSchema.schema)) {
-				// Manually trigger handleConditionalSchemas to add fields BEFORE setting value
-				this.handleConditionalSchemas(radioField, i, group);
+				const schemaId = conditionalSchema.triggerValue;
 
-				// Set the radio control value to select this option
-				radioField.controlRef.setValue(i, { emitEvent: false });
+				// Manually trigger handleConditionalSchemas to add fields BEFORE setting value
+				this.handleConditionalSchemas(radioField, schemaId, group);
+
+				// Set the radio control value to the stable ID
+				radioField.controlRef.setValue(schemaId, { emitEvent: false });
 
 				// Recursively prepare the conditionally added fields
 				if (conditionalSchema.addedKeys && conditionalSchema.addedKeys.length > 0) {
@@ -909,9 +890,11 @@ export class SchemaFormService {
 				? Object.values(oneOfSchema.properties)[0]?.title
 				: undefined;
 
+			const schemaId = this.generateSchemaId(oneOfSchema, i);
+
 			return {
 				label: oneOfSchema.title || titleFromProps || `Option ${i + 1}`,
-				value: i,
+				value: schemaId,
 			};
 		});
 
@@ -934,7 +917,10 @@ export class SchemaFormService {
 			conditionalSchemas: schema.oneOf.map(
 				(oneOfSchema, i) =>
 					({
-						triggerValue: i,
+						triggerValue: this.generateSchemaId(
+							oneOfSchema.$ref ? this.resolveRef(oneOfSchema.$ref) : oneOfSchema,
+							i,
+						),
 						schema: oneOfSchema.$ref ? this.resolveRef(oneOfSchema.$ref) : oneOfSchema,
 						addedKeys: [],
 					}) as ConditionalSchema,
@@ -1688,6 +1674,21 @@ export class SchemaFormService {
 				}
 			}
 		}
+	}
+
+	/**
+	 * Generates a stable identifier for a schema option in oneOf/anyOf.
+	 * Uses the schema's title if available, otherwise falls back to index-based ID.
+	 *
+	 * @param schema - The schema to generate an ID for
+	 * @param index - The index of this schema in the oneOf/anyOf array
+	 * @returns A stable string identifier
+	 */
+	private generateSchemaId(schema: JsonSchema, index: number): string {
+		if (schema.title && schema.title.trim()) {
+			return schema.title.trim().replace(/\s+/g, '_').toLowerCase();
+		}
+		return `option_${index}`;
 	}
 
 	/**
