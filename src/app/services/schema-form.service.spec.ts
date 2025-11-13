@@ -778,8 +778,8 @@ describe('SchemaFormService', () => {
 			const rootGroup = service.schemaToFieldConfig(oneOfSchema);
 			const paymentGroup = rootGroup.fields['paymentMethod'] as SchemaFieldGroup;
 
-			expect(paymentGroup.fields['paymentMethod_oneOf-option']).toBeDefined();
-			expect(paymentGroup.fields['paymentMethod_oneOf-option'].type).toBe(
+			expect(paymentGroup.fields['_paymentMethod_oneOf-option']).toBeDefined();
+			expect(paymentGroup.fields['_paymentMethod_oneOf-option'].type).toBe(
 				SchemaFieldType.Radio,
 			);
 		});
@@ -788,7 +788,7 @@ describe('SchemaFormService', () => {
 			const rootGroup = service.schemaToFieldConfig(oneOfSchema);
 			const paymentGroup = rootGroup.fields['paymentMethod'] as SchemaFieldGroup;
 			const radioField = paymentGroup.fields[
-				'paymentMethod_oneOf-option'
+				'_paymentMethod_oneOf-option'
 			] as SchemaFieldConfig;
 
 			expect(radioField.options!.length).toBe(2);
@@ -799,7 +799,7 @@ describe('SchemaFormService', () => {
 		it('should add conditional schemas for each option', () => {
 			const rootGroup = service.schemaToFieldConfig(oneOfSchema);
 			const paymentGroup = rootGroup.fields['paymentMethod'] as SchemaFieldGroup;
-			const radioField = paymentGroup.fields['paymentMethod_oneOf-option'];
+			const radioField = paymentGroup.fields['_paymentMethod_oneOf-option'];
 
 			expect(radioField.conditionalSchemas?.length).toBe(2);
 		});
@@ -808,7 +808,7 @@ describe('SchemaFormService', () => {
 			const rootGroup = service.schemaToFieldConfig(oneOfSchema);
 			const paymentMethodGroup = rootGroup.fields['paymentMethod'] as SchemaFieldGroup;
 			const radioField = paymentMethodGroup.fields[
-				'paymentMethod_oneOf-option'
+				'_paymentMethod_oneOf-option'
 			] as SchemaFieldConfig;
 
 			// Simulate selecting the first option (Credit Card) using stable ID
@@ -1078,7 +1078,7 @@ describe('SchemaFormService', () => {
 			const rootGroup = service.schemaToFieldConfig(oneOfSchema);
 			const paymentMethodGroup = rootGroup.fields['paymentMethod'] as SchemaFieldGroup;
 			const radioField = paymentMethodGroup.fields[
-				'paymentMethod_oneOf-option'
+				'_paymentMethod_oneOf-option'
 			] as SchemaFieldConfig;
 
 			// Select first option (Credit Card)

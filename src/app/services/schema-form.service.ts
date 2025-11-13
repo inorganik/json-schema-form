@@ -853,10 +853,11 @@ export class SchemaFormService {
 			};
 		});
 
-		// Create a control for the radio (not added to FormGroup)
-		const conditionalControl = new FormControl(null);
+		// Create a control for the radio with validators
+		const { validations, validators } = this.buildOneOfValidators(schema.oneOf);
+		const conditionalControl = new FormControl(null, validators);
 
-		const radioKey = `${baseKey}_${this.oneOfKeySegment}`;
+		const radioKey = `_${baseKey}_${this.oneOfKeySegment}`;
 
 		// Parent is determined by if there is a key
 		const radioParent = fieldsetGroup || targetGroup;
@@ -869,6 +870,7 @@ export class SchemaFormService {
 			type: SchemaFieldType.Radio,
 			options,
 			parent: radioParent,
+			validations,
 			conditionalSchemas: schema.oneOf.map(
 				(oneOfSchema, i) =>
 					({
@@ -885,6 +887,9 @@ export class SchemaFormService {
 
 		// Add the radio field to the fieldset group's fields
 		radioParent.fields[radioKey] = radioField;
+
+		// Add the radio control to the parent FormGroup so validation works
+		radioParent.groupRef?.addControl(radioKey, conditionalControl);
 
 		// Set up valueChanges subscription for conditional logic
 		const subscription = conditionalControl.valueChanges.subscribe(value => {
@@ -1469,6 +1474,42 @@ export class SchemaFormService {
 			validations.exclusiveMinimum = schema.exclusiveMinimum;
 		}
 
+		return { validators, validations };
+	}
+
+	/**
+	 * Determines if a oneOf is required.
+	 *
+	 * @param oneOfSchemas - Array of schemas in the oneOf
+	 * @returns true if any option has required fields
+	 */
+	private buildOneOfValidators(oneOfSchemas: JsonSchema[]): {
+		validators: any[];
+		validations: any;
+	} {
+		// Create validators array
+		const validators = [];
+		const validations: any = {};
+
+		// Check if any oneOf option has required fields
+		let isRequired = false;
+		for (let oneOfSchema of oneOfSchemas) {
+			// Resolve $ref if present
+			if (oneOfSchema.$ref) {
+				const resolved = this.resolveRef(oneOfSchema.$ref);
+				if (resolved) {
+					oneOfSchema = resolved;
+				}
+			}
+			// Check for common pattern of requiring an option exclusively
+			if (oneOfSchema.required && oneOfSchema.required.length > 0 && oneOfSchema.not) {
+				isRequired = true;
+			}
+		}
+		if (isRequired) {
+			validators.push(Validators.required);
+			validations.required = true;
+		}
 		return { validators, validations };
 	}
 
