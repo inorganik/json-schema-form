@@ -9,8 +9,10 @@ import {
 	SchemaFieldConfig,
 	SchemaFieldGroup,
 	SchemaFieldType,
+	SchemaFormError,
 } from '../models/form-models';
 import { JsonSchema } from '../models/schema-models';
+import { stripUnderscoreFields } from '../utils/schema-utils';
 
 /**
  * Service for rendering forms from json schemas
@@ -27,12 +29,13 @@ export class SchemaFormService {
 	private schemaCache: Map<string, JsonSchema> = new Map();
 
 	// subscriptions for watching field values
-	public subscriptions = new Map<string, Subscription>();
+	private subscriptions = new Map<string, Subscription>();
 
 	// Toggle debug property in field configs, enabling display of unique keys
 	private debug = false;
 
 	private anyOfKeySegment = 'anyOf-option';
+
 	private oneOfKeySegment = 'oneOf-option';
 
 	/**
@@ -194,9 +197,63 @@ export class SchemaFormService {
 		this.prepareStructureForValue(rootGroup, value);
 		// Second pass: patch the values to the form controls
 		rootGroup.groupRef.patchValue(value);
+		setTimeout(() => {
+			rootGroup.groupRef.patchValue(value);
+		}, 200);
 	}
 
 	/**
+	 * Gets the form value, stripping out oneOf control values (needed for validation)
+	 */
+	getValue(formGroup: SchemaFieldGroup): any {
+		const value = formGroup.groupRef.getRawValue();
+		return stripUnderscoreFields(value);
+	}
+
+	/**
+	 * Recursively collects all form errors
+	 */
+	getAllFormErrors(
+		fieldConfig: SchemaFieldConfig | SchemaFieldGroup | SchemaFieldArray,
+	): SchemaFormError[] {
+		const errors: SchemaFormError[] = [];
+
+		// Recursively process FormGroup
+		if (fieldConfig.type === SchemaFieldType.Group) {
+			const groupConfig = fieldConfig as SchemaFieldGroup;
+			Object.keys(groupConfig.fields).forEach(key => {
+				const childField = groupConfig.fields[key];
+				errors.push(...this.getAllFormErrors(childField));
+			});
+			return errors;
+		}
+
+		// Recursively process FormArray
+		if (fieldConfig.type === SchemaFieldType.Array) {
+			const arrayConfig = fieldConfig as SchemaFieldArray;
+			arrayConfig.items.forEach(childConfig => {
+				errors.push(...this.getAllFormErrors(childConfig));
+			});
+			return errors;
+		}
+
+		// Add this control's errors if any exist
+		const field = fieldConfig as SchemaFieldConfig;
+		if (field.controlRef.errors) {
+			Object.keys(field.controlRef.errors).forEach(errorKey => {
+				errors.push({
+					fieldName: field.label || field.parent.label || field.key,
+					key: errorKey,
+					value: field.controlRef.errors![errorKey],
+				});
+			});
+		}
+
+		return errors;
+	}
+
+	/**
+	 * patchValue helper:
 	 * Recursively prepares the field structure for patching by adding array items
 	 * and selecting oneOf/anyOf options based on the value object
 	 *
@@ -269,6 +326,7 @@ export class SchemaFormService {
 	}
 
 	/**
+	 * patchValue helper:
 	 * Recursively prepare any nested structures in conditional schema added fields
 	 *
 	 * @param parentGroup
@@ -361,6 +419,7 @@ export class SchemaFormService {
 	}
 
 	/**
+	 * patchValue helper:
 	 * Handles if/then/else conditional schemas when patching values.
 	 * Triggers the handleConditionalSchemas method to add fields, then recursively prepares nested structures.
 	 *
@@ -396,6 +455,7 @@ export class SchemaFormService {
 	}
 
 	/**
+	 * patchValue helper:
 	 * Selects the appropriate oneOf option based on the value object
 	 *
 	 * @param group - the field group containing the oneOf radio field
@@ -426,6 +486,7 @@ export class SchemaFormService {
 	}
 
 	/**
+	 * patchValue helper:
 	 * Selects the appropriate anyOf options based on the value object
 	 *
 	 * @param group - the field group containing the anyOf checkbox fields
@@ -458,6 +519,7 @@ export class SchemaFormService {
 	}
 
 	/**
+	 * patchValue helper:
 	 * Checks if a value object matches a JSON schema's structure
 	 * Used to determine which oneOf/anyOf option should be selected
 	 *
@@ -521,6 +583,7 @@ export class SchemaFormService {
 	}
 
 	/**
+	 * patchValue helper:
 	 * Adds fields for additional properties found in the value object that don't
 	 * already exist in the field group. Only handles simple key-value pairs.
 	 *
@@ -928,6 +991,7 @@ export class SchemaFormService {
 		// Create the FieldGroup config
 		const fieldGroup: SchemaFieldGroup = {
 			label: title,
+			description: schema.description,
 			groupRef: formGroup,
 			key,
 			uniqueKey,

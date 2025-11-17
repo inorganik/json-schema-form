@@ -16,6 +16,7 @@ import {
 	arraySchema,
 	nestedSchema,
 	simpleSchema,
+	varietySchema,
 } from '../mocks/simple-schema.mock';
 import {
 	SchemaFieldArray,
@@ -379,6 +380,24 @@ describe('SchemaFormService', () => {
 		});
 	});
 
+	describe('getAllFormErrors', () => {
+		it('should get all errors in a group config', () => {
+			const rootGroup = service.schemaToFieldConfig(varietySchema);
+			rootGroup.groupRef.patchValue({
+				name: 'J',
+				email: 'jamie@example',
+				enabled: true,
+				status: {
+					priority: 'low',
+				},
+				columns: [{ title: 'foo', components: [] }],
+			});
+
+			const errors = service.getAllFormErrors(rootGroup);
+			expect(errors).toHaveLength(3);
+		});
+	});
+
 	describe('addField', () => {
 		it('should add a text field to parent group', () => {
 			const rootGroup = service.schemaToFieldConfig({ type: 'object', properties: {} });
@@ -581,77 +600,50 @@ describe('SchemaFormService', () => {
 	describe('addArray', () => {
 		it('should add an array field to parent', () => {
 			const rootGroup = service.schemaToFieldConfig({ type: 'object', properties: {} });
-			const arrayFieldSchema: JsonSchema = {
-				type: 'array',
-				title: 'Tags',
-				items: { type: 'string', title: 'Tag' },
-			};
 
-			service.addArray(arrayFieldSchema, rootGroup, 'tags', 0);
+			service.addArray(arrayFieldSchema, rootGroup, 'columns', 0);
 
-			expect(rootGroup.fields['tags']).toBeDefined();
-			expect(rootGroup.fields['tags'].type).toBe(SchemaFieldType.Array);
-			expect(rootGroup.groupRef?.get('tags')).toBeInstanceOf(FormArray);
+			expect(rootGroup.fields['columns']).toBeDefined();
+			expect(rootGroup.fields['columns'].type).toBe(SchemaFieldType.Array);
+			expect(rootGroup.groupRef?.get('columns')).toBeInstanceOf(FormArray);
 		});
 
 		it('should store itemSchema for later use', () => {
 			const rootGroup = service.schemaToFieldConfig({ type: 'object', properties: {} });
-			const arrayFieldSchema: JsonSchema = {
-				type: 'array',
-				title: 'Tags',
-				items: { type: 'string', title: 'Tag' },
-			};
 
-			service.addArray(arrayFieldSchema, rootGroup, 'tags', 0);
+			service.addArray(arrayFieldSchema, rootGroup, 'columns', 0);
 
-			const arrayField = rootGroup.fields['tags'];
+			const arrayField = rootGroup.fields['columns'];
 			expect((arrayField as any).itemSchema).toBeDefined();
 		});
 
 		it('should add validations for minItems and maxItems', () => {
 			const rootGroup = service.schemaToFieldConfig({ type: 'object', properties: {} });
-			const arrayFieldSchema: JsonSchema = {
-				type: 'array',
-				title: 'Tags',
-				items: { type: 'string', title: 'Tag' },
-				minItems: 1,
-				maxItems: 5,
-			};
 
-			service.addArray(arrayFieldSchema, rootGroup, 'tags', 0);
+			service.addArray(arrayFieldSchema, rootGroup, 'columns', 0);
 
-			const arrayField = rootGroup.fields['tags'] as SchemaFieldArray;
+			const arrayField = rootGroup.fields['columns'] as SchemaFieldArray;
 			expect(arrayField.validations?.minItems).toBe(1);
 			expect(arrayField.validations?.maxItems).toBe(5);
 		});
 
 		it('should add minimum required items if minItems specified', () => {
 			const rootGroup = service.schemaToFieldConfig({ type: 'object', properties: {} });
-			const arrayFieldSchema: JsonSchema = {
-				type: 'array',
-				title: 'Tags',
-				items: { type: 'string', title: 'Tag' },
-				minItems: 2,
-			};
 
-			service.addArray(arrayFieldSchema, rootGroup, 'tags', 0);
+			const schema = { ...arrayFieldSchema, minItems: 2 };
+			service.addArray(schema, rootGroup, 'columns', 0);
 
-			const arrayField = rootGroup.fields['tags'];
+			const arrayField = rootGroup.fields['columns'];
 			expect((arrayField as any).items.length).toBe(2);
 		});
 
 		it('should implement canAddItem based on maxItems', () => {
 			const rootGroup = service.schemaToFieldConfig({ type: 'object', properties: {} });
-			const arrayFieldSchema: JsonSchema = {
-				type: 'array',
-				title: 'Tags',
-				items: { type: 'string', title: 'Tag' },
-				maxItems: 3,
-			};
 
-			service.addArray(arrayFieldSchema, rootGroup, 'tags', 0);
+			const schema = { ...arrayFieldSchema, maxItems: 3 };
+			service.addArray(schema, rootGroup, 'columns', 0);
 
-			const arrayField = rootGroup.fields['tags'] as SchemaFieldArray;
+			const arrayField = rootGroup.fields['columns'] as SchemaFieldArray;
 			expect(arrayField.canAddItem()).toBe(true);
 
 			// Add 3 items
@@ -664,16 +656,11 @@ describe('SchemaFormService', () => {
 
 		it('should implement canRemoveItem based on minItems', () => {
 			const rootGroup = service.schemaToFieldConfig({ type: 'object', properties: {} });
-			const arrayFieldSchema: JsonSchema = {
-				type: 'array',
-				title: 'Tags',
-				items: { type: 'string', title: 'Tag' },
-				minItems: 2,
-			};
 
-			service.addArray(arrayFieldSchema, rootGroup, 'tags', 0);
+			const schema = { ...arrayFieldSchema, minItems: 2 };
+			service.addArray(schema, rootGroup, 'columns', 0);
 
-			const arrayField = rootGroup.fields['tags'] as SchemaFieldArray;
+			const arrayField = rootGroup.fields['columns'] as SchemaFieldArray;
 			expect(arrayField.canRemoveItem()).toBe(false); // Already at minItems
 		});
 
@@ -811,7 +798,7 @@ describe('SchemaFormService', () => {
 				'_paymentMethod_oneOf-option'
 			] as SchemaFieldConfig;
 
-			// Simulate selecting the first option (Credit Card) using stable ID
+			// Simulate selecting the first option (Credit Card)
 			radioField.controlRef.setValue('credit_card');
 
 			// Wait for the subscription to process

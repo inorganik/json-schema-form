@@ -44,6 +44,7 @@ export const schemaWithEnum: JsonSchema = {
 			enum: ['low', 'medium', 'high', 'urgent', 'critical'],
 		},
 	},
+	required: ['status'],
 };
 
 export const schemaWithDefaults: JsonSchema = {
@@ -158,4 +159,31 @@ export const arrayFieldSchema: JsonSchema = {
 		required: ['components'],
 	},
 	minItems: 1,
+	maxItems: 5,
+};
+
+export const varietySchema: JsonSchema = {
+	type: 'object',
+	title: 'Simple Form',
+	properties: {
+		name: {
+			type: 'string',
+			title: 'Name',
+			minLength: 2,
+			maxLength: 50,
+		},
+		email: {
+			type: 'string',
+			title: 'Email',
+			pattern: '^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$',
+		},
+		enabled: {
+			type: 'boolean',
+			title: 'Enabled',
+			format: 'toggle',
+		},
+		status: schemaWithEnum,
+		columns: arrayFieldSchema,
+	},
+	required: ['name', 'email'],
 };

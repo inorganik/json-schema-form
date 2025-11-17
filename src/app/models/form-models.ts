@@ -14,7 +14,6 @@ export enum SchemaFieldType {
 	Toggle = 'toggle',
 	Hidden = 'hidden',
 }
-
 export interface FieldValidations {
 	required?: boolean;
 	maxLength?: number;
@@ -81,4 +80,10 @@ export interface SchemaFieldArray extends BaseSchemaConfig {
 	validations?: FieldArrayValidations;
 	canAddItem: () => boolean;
 	canRemoveItem: () => boolean;
+}
+
+export interface SchemaFormError {
+	fieldName: string;
+	key: string;
+	value: any;
 }
