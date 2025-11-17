@@ -5,7 +5,7 @@ import { SchemaFieldGroup } from '../models/form-models';
 import { SchemaFormService } from '../services/schema-form.service';
 
 @Component({
-	selector: 'app-array-test',
+	selector: 'app-mutually-exclusive-test',
 	imports: [FieldContainerComponent],
 	providers: [SchemaFormService],
 	template: `
@@ -13,14 +13,32 @@ import { SchemaFormService } from '../services/schema-form.service';
 		<button type="button" (click)="handleFormSubmit()">Submit</button>
 	`,
 })
-export class ArrayTestComponent implements OnInit {
+export class MutuallyExclusiveTestComponent implements OnInit {
 	groupConfig: SchemaFieldGroup;
 	private http = inject(HttpClient);
 	private schemaService = inject(SchemaFormService);
 
 	ngOnInit() {
-		this.http.get('/array-schema.json').subscribe(schema => {
-			this.groupConfig = this.schemaService.schemaToFieldConfig(schema);
+		this.http.get('/mutually-exclusive.json').subscribe(schema => {
+			this.groupConfig = this.schemaService.schemaToFieldConfig({
+				properties: {
+					mainCourse: {
+						title: 'Main Course',
+						type: 'string',
+					},
+					soup: {
+						title: 'Soup',
+						type: 'string',
+					},
+					salad: {
+						title: 'Salad',
+						type: 'string',
+					},
+				},
+				not: {
+					required: ['soup', 'salad'],
+				},
+			});
 			console.log('schema config', this.groupConfig);
 		});
 	}

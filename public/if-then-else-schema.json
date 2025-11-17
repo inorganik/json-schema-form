@@ -3,11 +3,6 @@
 	"title": "Enablement",
 	"type": "object",
 	"properties": {
-		"status": {
-			"title": "Status",
-			"enum": ["FLAG_CONTROLLED", "ENABLED", "DISABLED"],
-			"format": "options-label"
-		},
 		"title": {
 			"title": "Title",
 			"type": "string"
@@ -21,6 +16,11 @@
 			"title": "Params",
 			"type": "object",
 			"additionalProperties": true
+		},
+		"status": {
+			"title": "Status",
+			"enum": ["FLAG_CONTROLLED", "ENABLED", "DISABLED"],
+			"format": "options-label"
 		}
 	},
 	"required": ["status", "title", "cost"],

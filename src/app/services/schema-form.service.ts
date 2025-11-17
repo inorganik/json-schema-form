@@ -674,6 +674,11 @@ export class SchemaFormService {
 			return;
 		}
 
+		// Handle mutually exclusive options (not + required pattern)
+		// This must be checked before processing properties
+		const mutuallyExclusiveProps = this.detectMutuallyExclusiveOptions(schema);
+		let mutuallyExclusiveOneOf: JsonSchema;
+
 		// Handle anyOf - create checkbox fields for each option
 		if (schema.anyOf) {
 			this.handleAnyOf(schema, parent, key);
@@ -682,6 +687,14 @@ export class SchemaFormService {
 		// Handle oneOf - create radio field with options
 		if (schema.oneOf) {
 			this.handleOneOf(schema, parent, key);
+		}
+
+		// Handle mutually exclusive options as oneOf
+		if (mutuallyExclusiveProps.length > 0) {
+			mutuallyExclusiveOneOf = this.handleMutuallyExclusiveAsOneOf(
+				schema,
+				mutuallyExclusiveProps,
+			);
 		}
 
 		// Handle top-level array type with items
@@ -699,6 +712,17 @@ export class SchemaFormService {
 			const propertyEntries = Object.entries(schema.properties);
 			for (let i = 0; i < propertyEntries.length; i++) {
 				const [propKey, propertySchema] = propertyEntries[i];
+
+				// Skip mutually exclusive properties
+				if (mutuallyExclusiveProps.includes(propKey)) {
+					if (mutuallyExclusiveOneOf) {
+						// Insert oneOf schema in order
+						this.handleOneOf(mutuallyExclusiveOneOf, parent, null, i);
+						mutuallyExclusiveOneOf = null;
+					}
+					continue;
+				}
+
 				// Handle $ref in property schema
 				let actualSchema = propertySchema;
 				if (propertySchema.$ref) {
@@ -872,11 +896,13 @@ export class SchemaFormService {
 	 * @param schema The JSON schema containing oneOf
 	 * @param parent The parent FieldGroup or FieldArray to add fields to
 	 * @param key Optional key to use for the oneOf field (when processing a property)
+	 * @param index Allows field to be sorted if necessary
 	 */
 	private handleOneOf(
 		schema: JsonSchema,
 		parent: SchemaFieldGroup | SchemaFieldArray,
 		key?: string,
+		index?: number,
 	): void {
 		if (parent.type !== SchemaFieldType.Group) {
 			console.warn('oneOf requires parent to be a FieldGroup', schema);
@@ -921,15 +947,21 @@ export class SchemaFormService {
 		const conditionalControl = new FormControl(null, validators);
 
 		const radioKey = `_${baseKey}_${this.oneOfKeySegment}`;
-
 		// Parent is determined by if there is a key
 		const radioParent = fieldsetGroup || targetGroup;
+
+		// Create unique key with index if provided
+		let uniqueKey = radioParent.uniqueKey + '_';
+		if (index !== undefined) {
+			uniqueKey += `00${index}`.slice(-3);
+		}
+		uniqueKey += radioKey;
 
 		const radioField: SchemaFieldConfig = {
 			label: schema.title || '',
 			controlRef: conditionalControl,
 			key: radioKey,
-			uniqueKey: `${radioParent.uniqueKey}_${radioKey}`,
+			uniqueKey: uniqueKey,
 			type: SchemaFieldType.Radio,
 			options,
 			parent: radioParent,
@@ -962,6 +994,88 @@ export class SchemaFormService {
 	}
 
 	/**
+	 * Detects mutually exclusive options in a schema based on the "not" + "required" pattern.
+	 * Returns the list of property names that are mutually exclusive.
+	 *
+	 * Pattern: { "not": { "required": ["prop1", "prop2"] } }
+	 *
+	 * @param schema - The JSON schema to check
+	 * @returns Array of property names that are mutually exclusive, or empty array if not found
+	 */
+	private detectMutuallyExclusiveOptions(schema: JsonSchema): string[] {
+		if (!schema.not || !schema.not.required || !Array.isArray(schema.not.required)) {
+			return [];
+		}
+
+		// The "not" + "required" pattern means these properties are mutually exclusive
+		const mutuallyExclusiveProps = schema.not.required;
+
+		// Validate that all properties exist in the schema
+		if (schema.properties) {
+			const validProps = mutuallyExclusiveProps.filter(prop => prop in schema.properties);
+			if (validProps.length !== mutuallyExclusiveProps.length) {
+				console.warn('Some mutually exclusive properties not found in schema.properties');
+			}
+			return validProps;
+		}
+
+		return [];
+	}
+
+	/**
+	 * Handles mutually exclusive options by treating them as oneOf conditional schemas.
+	 * Creates a radio field with options for each mutually exclusive property.
+	 *
+	 * @param schema - The original schema containing the mutually exclusive properties
+	 * @param parent - The parent field group
+	 * @param mutuallyExclusiveProps - Array of property names that are mutually exclusive
+	 */
+	private handleMutuallyExclusiveAsOneOf(
+		schema: JsonSchema,
+		mutuallyExclusiveProps: string[],
+	): JsonSchema {
+		// Build oneOf schemas from the mutually exclusive properties
+		const oneOfSchemas: JsonSchema[] = [];
+		let titles: string[] = [];
+
+		for (const propKey of mutuallyExclusiveProps) {
+			let propSchema = schema.properties![propKey];
+
+			// Resolve $ref if present
+			if (propSchema.$ref) {
+				const resolvedSchema = this.resolveRef(propSchema.$ref);
+				if (resolvedSchema) {
+					propSchema = resolvedSchema;
+				}
+			}
+
+			// Use the resolved schema directly as the oneOf option
+			const optionSchema: JsonSchema = {
+				title: propSchema.title || this.snakeCaseToLabel(propKey),
+				properties: {
+					[propKey]: propSchema,
+				},
+			};
+
+			oneOfSchemas.push(optionSchema);
+			titles.push(propSchema.title || this.snakeCaseToLabel(propKey));
+		}
+
+		// Generate title for the oneOf group
+		const lastTitle = titles.slice(-1);
+		titles = titles.slice(0, titles.length - 1);
+		const groupTitle = titles.join(', ') + ' or ' + lastTitle;
+
+		// Create a synthetic oneOf schema
+		const syntheticOneOfSchema: JsonSchema = {
+			type: 'object',
+			title: groupTitle,
+			oneOf: oneOfSchemas,
+		};
+		return syntheticOneOfSchema;
+	}
+
+	/**
 	 * Creates a new FormGroup for the groupRef property in FieldGroup, and assigns
 	 * properties of the FieldGroup based on the schema
 	 */
@@ -971,7 +1085,6 @@ export class SchemaFormService {
 		key: string,
 		index?: number,
 	): void {
-		// console.log('add group', schema, parent, key);
 		// Create a new FormGroup
 		const formGroup = new FormGroup({});
 

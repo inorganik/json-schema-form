@@ -238,3 +238,23 @@ export const arrayConditionalSchema: JsonSchema = {
 		},
 	},
 };
+
+export const mutuallyExclusiveSchema: JsonSchema = {
+	properties: {
+		mainCourse: {
+			title: 'Main Course',
+			type: 'string',
+		},
+		soup: {
+			title: 'Soup',
+			type: 'string',
+		},
+		salad: {
+			title: 'Salad',
+			type: 'string',
+		},
+	},
+	not: {
+		required: ['soup', 'salad'],
+	},
+};

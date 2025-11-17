@@ -6,6 +6,7 @@ import {
 	anyOfSchema,
 	arrayConditionalSchema,
 	ifThenElseSchema,
+	mutuallyExclusiveSchema,
 	nestedConditionalSchema,
 	oneOfSchema,
 } from '../mocks/conditional-schema.mock';
@@ -1068,8 +1069,8 @@ describe('SchemaFormService', () => {
 				'_paymentMethod_oneOf-option'
 			] as SchemaFieldConfig;
 
-			// Select first option (Credit Card)
-			radioField.controlRef.setValue(0);
+			// Select first option (Credit Card) - use schema ID string instead of index
+			radioField.controlRef.setValue('credit_card');
 
 			setTimeout(() => {
 				expect(paymentMethodGroup.fields['cardNumber']).toBeDefined();
@@ -1109,6 +1110,43 @@ describe('SchemaFormService', () => {
 			const result = (service as any).snakeCaseToLabel('FLAG_CONTROLLED');
 
 			expect(result).toBe('Flag Controlled');
+		});
+	});
+
+	describe('Mutually Exclusive Options', () => {
+		it('should convert mutually exclusive properties into a oneOf (radio) field', () => {
+			const rootGroup = service.schemaToFieldConfig(mutuallyExclusiveSchema);
+
+			// There should be no direct fields for the mutually exclusive props
+			expect(rootGroup.fields['soup']).toBeUndefined();
+			expect(rootGroup.fields['salad']).toBeUndefined();
+
+			// There should be a radio field created for the mutually exclusive options
+			const radioFields = Object.values(rootGroup.fields).filter(
+				f => f.type === SchemaFieldType.Radio,
+			) as any[];
+
+			expect(radioFields.length).toBeGreaterThan(0);
+
+			const radio = radioFields[0];
+			expect(radio.options.length).toBe(2);
+
+			const optionLabels = radio.options.map((o: any) => o.label);
+			expect(optionLabels).toEqual(expect.arrayContaining(['Soup', 'Salad']));
+		});
+
+		it('radio options should correspond to the mutually exclusive property keys', () => {
+			const rootGroup = service.schemaToFieldConfig(mutuallyExclusiveSchema);
+
+			const radioFields = Object.values(rootGroup.fields).filter(
+				f => f.type === SchemaFieldType.Radio,
+			) as any[];
+			const radio = radioFields[0];
+
+			// the underlying conditionalSchemas should reference soup and salad
+			const triggerSchemas = radio.conditionalSchemas.map((c: any) => c.schema);
+			const propNames = triggerSchemas.flatMap((s: any) => Object.keys(s.properties || {}));
+			expect(propNames).toEqual(expect.arrayContaining(['soup', 'salad']));
 		});
 	});
 });

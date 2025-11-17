@@ -28,7 +28,8 @@ export class WidgetTestComponent implements OnInit {
 
 	handleFormSubmit() {
 		console.log('valid', this.groupConfig.groupRef.valid);
-		console.log('form value', this.groupConfig.groupRef.value);
+		const value = this.schemaService.getValue(this.groupConfig);
+		console.log('form value', value);
 	}
 
 	testPatchValue() {

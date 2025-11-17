@@ -11,6 +11,7 @@ export class AppComponent {
 	items = [
 		{ title: 'If/then test', link: 'if-then-else' },
 		{ title: 'Array test', link: 'array' },
+		{ title: 'Mutually exclusive test', link: 'mutually-exclusive' },
 		{ title: 'Widget test', link: 'widget' },
 	];
 }

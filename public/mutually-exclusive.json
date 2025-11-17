@@ -1,0 +1,70 @@
+{
+	"title": "Progress List Component",
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"properties": {
+		"componentType": { "const": "PROGRESS_LIST" },
+		"componentUniqueName": { "title": "Component Unique Name", "type": "string" },
+		"action": {
+			"$ref": "#/$defs/action"
+		},
+		"apiAction": {
+			"$ref": "#/$defs/apiAction"
+		},
+		"cardTitleField": { "type": "string" },
+		"totalField": { "type": "string" },
+		"progressField": { "type": "string" },
+		"sortBy": { "type": "string" },
+		"sortAscending": { "type": "boolean" }
+	},
+	"required": [
+		"componentType",
+		"componentUniqueName",
+		"cardTitleField",
+		"totalField",
+		"progressField"
+	],
+	"not": {
+		"required": ["action", "apiAction"]
+	},
+	"additionalProperties": false,
+	"$defs": {
+		"apiAction": {
+			"title": "API Action",
+			"type": "object",
+			"properties": {
+				"apiPath": {
+					"type": "string"
+				},
+				"method": {
+					"type": "string",
+					"enum": ["GET", "POST", "PUT", "DELETE"]
+				},
+				"requestBody": { "type": "object", "additionalProperties": true },
+				"redirect": {
+					"type": "object",
+					"properties": {
+						"urlPathSpecifier": {
+							"type": "string"
+						}
+					},
+					"required": ["urlPathSpecifier"]
+				}
+			},
+			"required": ["apiPath", "method", "redirect"]
+		},
+		"action": {
+			"title": "Action",
+			"type": "object",
+			"properties": {
+				"urlPathSpecifier": {
+					"type": "string"
+				},
+				"params": {
+					"type": "object",
+					"additionalProperties": true
+				}
+			},
+			"required": ["urlPathSpecifier"]
+		}
+	}
+}
