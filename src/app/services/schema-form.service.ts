@@ -675,9 +675,14 @@ export class SchemaFormService {
 		}
 
 		// Handle mutually exclusive options (not + required pattern)
-		// This must be checked before processing properties
 		const mutuallyExclusiveProps = this.detectMutuallyExclusiveOptions(schema);
 		let mutuallyExclusiveOneOf: JsonSchema;
+		if (mutuallyExclusiveProps.length > 1) {
+			mutuallyExclusiveOneOf = this.handleMutuallyExclusiveAsOneOf(
+				schema,
+				mutuallyExclusiveProps,
+			);
+		}
 
 		// Handle anyOf - create checkbox fields for each option
 		if (schema.anyOf) {
@@ -687,14 +692,6 @@ export class SchemaFormService {
 		// Handle oneOf - create radio field with options
 		if (schema.oneOf) {
 			this.handleOneOf(schema, parent, key);
-		}
-
-		// Handle mutually exclusive options as oneOf
-		if (mutuallyExclusiveProps.length > 0) {
-			mutuallyExclusiveOneOf = this.handleMutuallyExclusiveAsOneOf(
-				schema,
-				mutuallyExclusiveProps,
-			);
 		}
 
 		// Handle top-level array type with items
@@ -1006,16 +1003,11 @@ export class SchemaFormService {
 		if (!schema.not || !schema.not.required || !Array.isArray(schema.not.required)) {
 			return [];
 		}
-
-		// The "not" + "required" pattern means these properties are mutually exclusive
 		const mutuallyExclusiveProps = schema.not.required;
 
 		// Validate that all properties exist in the schema
 		if (schema.properties) {
 			const validProps = mutuallyExclusiveProps.filter(prop => prop in schema.properties);
-			if (validProps.length !== mutuallyExclusiveProps.length) {
-				console.warn('Some mutually exclusive properties not found in schema.properties');
-			}
 			return validProps;
 		}
 

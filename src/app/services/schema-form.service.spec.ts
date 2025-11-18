@@ -1069,8 +1069,8 @@ describe('SchemaFormService', () => {
 				'_paymentMethod_oneOf-option'
 			] as SchemaFieldConfig;
 
-			// Select first option (Credit Card) - use schema ID string instead of index
-			radioField.controlRef.setValue('credit_card');
+			// Select first option (Credit Card)
+			radioField.controlRef.setValue(0);
 
 			setTimeout(() => {
 				expect(paymentMethodGroup.fields['cardNumber']).toBeDefined();
