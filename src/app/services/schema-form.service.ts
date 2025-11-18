@@ -1208,7 +1208,13 @@ export class SchemaFormService {
 
 		// Create form control with default value and validators
 		const defaultValue =
-			schema.default !== undefined ? schema.default : schema.const ? schema.const : null;
+			schema.default !== undefined
+				? schema.default
+				: schema.const
+					? schema.const
+					: schema.type === 'boolean'
+						? false
+						: null;
 		const control = new FormControl(defaultValue, validators);
 
 		// Determine field type
