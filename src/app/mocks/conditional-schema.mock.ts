@@ -258,3 +258,52 @@ export const mutuallyExclusiveSchema: JsonSchema = {
 		required: ['soup', 'salad'],
 	},
 };
+
+// Create a schema with if/then that adds a oneOf field
+export const enablementSchema: JsonSchema = {
+	type: 'object',
+	properties: {
+		status: {
+			type: 'string',
+			enum: ['FLAG_CONTROLLED', 'ENABLED'],
+		},
+	},
+	allOf: [
+		{
+			if: {
+				properties: {
+					status: {
+						const: 'FLAG_CONTROLLED',
+					},
+				},
+			},
+			then: {
+				properties: {
+					flags: {
+						oneOf: [
+							{
+								title: 'Product flag',
+								properties: {
+									productFlag: {
+										type: 'string',
+									},
+								},
+								required: ['productFlag'],
+							},
+							{
+								title: 'Feature flag',
+								properties: {
+									featureFlag: {
+										type: 'string',
+									},
+								},
+								required: ['featureFlag'],
+							},
+						],
+					},
+				},
+				required: ['flags'],
+			},
+		},
+	],
+};

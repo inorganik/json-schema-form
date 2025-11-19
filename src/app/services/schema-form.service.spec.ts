@@ -5,6 +5,7 @@ import {
 	allOfSchema,
 	anyOfSchema,
 	arrayConditionalSchema,
+	enablementSchema,
 	ifThenElseSchema,
 	mutuallyExclusiveSchema,
 	nestedConditionalSchema,
@@ -194,190 +195,1017 @@ describe('SchemaFormService', () => {
 			);
 			expect(rootGroup.groupRef.patchValue).toHaveBeenCalledWith(value);
 		});
+	});
 
-		describe('prepareStructureForValue', () => {
-			it('should return early if value is null or undefined', () => {
-				const rootGroup = service.schemaToFieldConfig(simpleSchema);
-				jest.spyOn(service as any, 'addAdditionalPropertiesFromValue');
-				(service as any).prepareStructureForValue(rootGroup, null);
+	describe('prepareStructureForValue', () => {
+		it('should return early if value is null', () => {
+			const rootGroup = service.schemaToFieldConfig(simpleSchema);
+			jest.spyOn(service as any, 'addAdditionalPropertiesFromValue');
+			(service as any).prepareStructureForValue(rootGroup, null);
 
-				expect((service as any).addAdditionalPropertiesFromValue).not.toHaveBeenCalled();
-			});
+			expect((service as any).addAdditionalPropertiesFromValue).not.toHaveBeenCalled();
+		});
 
-			it('should return early if value is not an object', () => {
-				const rootGroup = service.schemaToFieldConfig(simpleSchema);
-				jest.spyOn(service as any, 'addAdditionalPropertiesFromValue');
-				(service as any).prepareStructureForValue(rootGroup, 'string');
+		it('should return early if value is undefined', () => {
+			const rootGroup = service.schemaToFieldConfig(simpleSchema);
+			jest.spyOn(service as any, 'addAdditionalPropertiesFromValue');
+			(service as any).prepareStructureForValue(rootGroup, undefined);
 
-				expect((service as any).addAdditionalPropertiesFromValue).not.toHaveBeenCalled();
-			});
+			expect((service as any).addAdditionalPropertiesFromValue).not.toHaveBeenCalled();
+		});
 
-			it('should add array items to match the value array length', () => {
-				const rootGroup = service.schemaToFieldConfig(arraySchema);
-				const array = rootGroup.fields['tags'] as SchemaFieldArray;
-				const value = { tags: ['tag1', 'tag2', 'tag3'] };
-				expect(array.items.length).toBe(1); // minItems: 1
-				(service as any).prepareStructureForValue(rootGroup, value);
+		it('should return early if value is not an object', () => {
+			const rootGroup = service.schemaToFieldConfig(simpleSchema);
+			jest.spyOn(service as any, 'addAdditionalPropertiesFromValue');
+			(service as any).prepareStructureForValue(rootGroup, 'string');
 
-				expect(array.items.length).toBe(3);
-			});
+			expect((service as any).addAdditionalPropertiesFromValue).not.toHaveBeenCalled();
+		});
 
-			it('should recursively prepare nested groups in arrays', () => {
-				const rootGroup = service.schemaToFieldConfig(arrayOfObjectsSchema);
-				const array = rootGroup.fields['addresses'] as SchemaFieldArray;
-				const value = {
-					addresses: [{ street: '123 Main St', city: 'NYC' }],
-				};
-				jest.spyOn(service as any, 'prepareStructureForValue');
-				(service as any).prepareStructureForValue(rootGroup, value);
+		it('should call addAdditionalPropertiesFromValue if group has additionalProperties', () => {
+			const schema: JsonSchema = {
+				type: 'object',
+				properties: {},
+				additionalProperties: true,
+			};
+			const rootGroup = service.schemaToFieldConfig(schema);
+			const value = { customField: 'test' };
+			jest.spyOn(service as any, 'addAdditionalPropertiesFromValue');
 
-				expect(array.items.length).toBe(1);
-				// Should be called recursively for the nested group
-				expect((service as any).prepareStructureForValue).toHaveBeenCalledTimes(2);
-			});
+			(service as any).prepareStructureForValue(rootGroup, value);
 
-			it('should select oneOf option based on value', () => {
-				const rootGroup = service.schemaToFieldConfig(oneOfSchema);
-				const value = {
-					paymentMethod: {
-						cardNumber: '1234-5678',
-						cvv: '123',
-					},
-				};
-				jest.spyOn(service as any, 'selectOneOfOption');
-				(service as any).prepareStructureForValue(rootGroup, value);
-
-				expect((service as any).selectOneOfOption).toHaveBeenCalled();
-			});
-
-			it('should select anyOf options based on value', () => {
-				const rootGroup = service.schemaToFieldConfig(anyOfSchema);
-				const value = {
-					features: {
-						optionA: 'value A',
-					},
-				};
-				jest.spyOn(service as any, 'selectAnyOfOptions');
-				(service as any).prepareStructureForValue(rootGroup, value);
-
-				expect((service as any).selectAnyOfOptions).toHaveBeenCalled();
-			});
-
-			it('should handle if/then/else conditional schemas', () => {
-				const rootGroup = service.schemaToFieldConfig(ifThenElseSchema);
-				const value = {
-					country: 'USA',
-				};
-				jest.spyOn(service as any, 'handleIfThenElseForPatch');
-				(service as any).prepareStructureForValue(rootGroup, value);
-
-				expect((service as any).handleIfThenElseForPatch).toHaveBeenCalled();
-			});
-
-			it('should recursively prepare nested groups', () => {
-				const rootGroup = service.schemaToFieldConfig(nestedSchema);
-				const value = {
-					user: {
-						firstName: 'John',
-						lastName: 'Doe',
-					},
-				};
-				const spy = jest.spyOn(service as any, 'prepareStructureForValue');
-				(service as any).prepareStructureForValue(rootGroup, value);
-
-				// Should be called for root and nested group
-				expect(spy).toHaveBeenCalledTimes(2);
-			});
-
-			it('should select correct oneOf option for conditionally added field', () => {
-				const rootGroup = service.schemaToFieldConfig(ifThenElseSchema);
-				const value = {
-					country: 'USA',
-					state: 'CA',
-				};
-				service.patchValue(rootGroup, value);
-
-				// The state field should be added by the if/then conditional
-				expect(rootGroup.fields['state']).toBeDefined();
-				// The state field control should have the value patched
-				const stateField = rootGroup.fields['state'] as SchemaFieldConfig;
-				expect(stateField.controlRef.value).toBe('CA');
-			});
-
-			it('should select correct oneOf option when patching nested oneOf in conditional fields', () => {
-				// Create a schema with if/then that adds a oneOf field
-				const schema: JsonSchema = {
-					type: 'object',
-					properties: {
-						status: {
-							type: 'string',
-							enum: ['FLAG_CONTROLLED', 'ENABLED'],
-						},
-					},
-					allOf: [
-						{
-							if: {
-								properties: {
-									status: {
-										const: 'FLAG_CONTROLLED',
-									},
-								},
-							},
-							then: {
-								properties: {
-									flags: {
-										oneOf: [
-											{
-												title: 'Product flag',
-												properties: {
-													productFlag: {
-														type: 'string',
-													},
-												},
-												required: ['productFlag'],
-											},
-											{
-												title: 'Feature flag',
-												properties: {
-													featureFlag: {
-														type: 'string',
-													},
-												},
-												required: ['featureFlag'],
-											},
-										],
-									},
-								},
-								required: ['flags'],
-							},
-						},
-					],
-				};
-
-				const rootGroup = service.schemaToFieldConfig(schema);
-
-				const value = {
-					status: 'FLAG_CONTROLLED',
-					flags: {
-						featureFlag: 'test-flag',
-					},
-				};
-				service.patchValue(rootGroup, value);
-
-				expect(rootGroup.fields['flags']).toBeDefined();
-
-				const flagsGroup = rootGroup.fields['flags'] as SchemaFieldGroup;
-				const radioKey = Object.keys(flagsGroup.fields).find(k =>
-					k.endsWith('oneOf-option'),
+			// Note: The field group needs to have additionalProperties set to true
+			// which is done in schemaToFieldConfig based on the schema
+			if (rootGroup.additionalProperties) {
+				expect((service as any).addAdditionalPropertiesFromValue).toHaveBeenCalledWith(
+					rootGroup,
+					value,
 				);
-				expect(radioKey).toBeDefined();
+			}
+		});
 
-				if (radioKey) {
-					const radioField = flagsGroup.fields[radioKey] as SchemaFieldConfig;
-					expect(radioField.controlRef.value).toBe('feature_flag');
-					expect(flagsGroup.fields['featureFlag']).toBeDefined();
-				}
+		it('should add array items to match the value array length', () => {
+			const rootGroup = service.schemaToFieldConfig(arraySchema);
+			const array = rootGroup.fields['tags'] as SchemaFieldArray;
+			const value = { tags: ['tag1', 'tag2', 'tag3'] };
+			expect(array.items.length).toBe(1); // minItems: 1
+			(service as any).prepareStructureForValue(rootGroup, value);
+
+			expect(array.items.length).toBe(3);
+		});
+
+		it('should recursively prepare nested groups in arrays', () => {
+			const rootGroup = service.schemaToFieldConfig(arrayOfObjectsSchema);
+			const array = rootGroup.fields['addresses'] as SchemaFieldArray;
+			const value = {
+				addresses: [{ street: '123 Main St', city: 'NYC' }],
+			};
+			jest.spyOn(service as any, 'prepareStructureForValue');
+			(service as any).prepareStructureForValue(rootGroup, value);
+
+			expect(array.items.length).toBe(1);
+			// Should be called recursively for the nested group
+			expect((service as any).prepareStructureForValue).toHaveBeenCalledTimes(2);
+		});
+
+		it('should not add array items if value for array is not an array', () => {
+			const rootGroup = service.schemaToFieldConfig(arraySchema);
+			const array = rootGroup.fields['tags'] as SchemaFieldArray;
+			const value = { tags: 'not-an-array' };
+			const initialLength = array.items.length;
+
+			(service as any).prepareStructureForValue(rootGroup, value);
+
+			expect(array.items.length).toBe(initialLength);
+		});
+
+		it('should select oneOf option based on value', () => {
+			const rootGroup = service.schemaToFieldConfig(oneOfSchema);
+			const value = {
+				paymentMethod: {
+					cardNumber: '1234-5678',
+					cvv: '123',
+				},
+			};
+			jest.spyOn(service as any, 'selectOneOfOption');
+			(service as any).prepareStructureForValue(rootGroup, value);
+
+			expect((service as any).selectOneOfOption).toHaveBeenCalled();
+		});
+
+		it('should select anyOf options based on value', () => {
+			const rootGroup = service.schemaToFieldConfig(anyOfSchema);
+			const value = {
+				features: {
+					optionA: 'value A',
+				},
+			};
+			jest.spyOn(service as any, 'selectAnyOfOptions');
+			(service as any).prepareStructureForValue(rootGroup, value);
+
+			expect((service as any).selectAnyOfOptions).toHaveBeenCalled();
+		});
+
+		it('should handle if/then/else conditional schemas', () => {
+			const rootGroup = service.schemaToFieldConfig(ifThenElseSchema);
+			const value = {
+				country: 'USA',
+			};
+			jest.spyOn(service as any, 'handleIfThenElseForPatch');
+			(service as any).prepareStructureForValue(rootGroup, value);
+
+			expect((service as any).handleIfThenElseForPatch).toHaveBeenCalled();
+		});
+
+		it('should not call handleIfThenElseForPatch if value for field is undefined', () => {
+			const rootGroup = service.schemaToFieldConfig(ifThenElseSchema);
+			const value = { someOtherField: 'test' };
+			jest.spyOn(service as any, 'handleIfThenElseForPatch');
+
+			(service as any).prepareStructureForValue(rootGroup, value);
+
+			expect((service as any).handleIfThenElseForPatch).not.toHaveBeenCalled();
+		});
+
+		it('should recursively prepare nested groups', () => {
+			const rootGroup = service.schemaToFieldConfig(nestedSchema);
+			const value = {
+				user: {
+					firstName: 'John',
+					lastName: 'Doe',
+				},
+			};
+			const spy = jest.spyOn(service as any, 'prepareStructureForValue');
+			(service as any).prepareStructureForValue(rootGroup, value);
+
+			// Should be called for root and nested group
+			expect(spy).toHaveBeenCalledTimes(2);
+		});
+
+		it('should not recursively prepare nested groups if value for group is undefined', () => {
+			const rootGroup = service.schemaToFieldConfig(nestedSchema);
+			const value = { name: 'John' }; // No user field
+			const spy = jest.spyOn(service as any, 'prepareStructureForValue');
+
+			(service as any).prepareStructureForValue(rootGroup, value);
+
+			// Should only be called once for root, not for nested group
+			expect(spy).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	describe('addAdditionalPropertiesFromValue', () => {
+		it('should return early if value is null', () => {
+			const schema: JsonSchema = {
+				type: 'object',
+				properties: {},
+				additionalProperties: true,
+			};
+			const rootGroup = service.schemaToFieldConfig(schema);
+			jest.spyOn(service, 'addField');
+
+			(service as any).addAdditionalPropertiesFromValue(rootGroup, null);
+
+			expect(service.addField).not.toHaveBeenCalled();
+		});
+
+		it('should return early if value is undefined', () => {
+			const schema: JsonSchema = {
+				type: 'object',
+				properties: {},
+				additionalProperties: true,
+			};
+			const rootGroup = service.schemaToFieldConfig(schema);
+			jest.spyOn(service, 'addField');
+
+			(service as any).addAdditionalPropertiesFromValue(rootGroup, undefined);
+
+			expect(service.addField).not.toHaveBeenCalled();
+		});
+
+		it('should return early if value is not an object', () => {
+			const schema: JsonSchema = {
+				type: 'object',
+				properties: {},
+				additionalProperties: true,
+			};
+			const rootGroup = service.schemaToFieldConfig(schema);
+			jest.spyOn(service, 'addField');
+
+			(service as any).addAdditionalPropertiesFromValue(rootGroup, 'string');
+
+			expect(service.addField).not.toHaveBeenCalled();
+		});
+
+		it('should add string field for additional string property', () => {
+			const schema: JsonSchema = {
+				type: 'object',
+				properties: {},
+				additionalProperties: true,
+			};
+			const rootGroup = service.schemaToFieldConfig(schema);
+			const value = { customString: 'test' };
+
+			(service as any).addAdditionalPropertiesFromValue(rootGroup, value);
+
+			expect(rootGroup.fields['customString']).toBeDefined();
+			expect(rootGroup.fields['customString'].type).toBe(SchemaFieldType.Text);
+		});
+
+		it('should add number field for additional number property', () => {
+			const schema: JsonSchema = {
+				type: 'object',
+				properties: {},
+				additionalProperties: true,
+			};
+			const rootGroup = service.schemaToFieldConfig(schema);
+			const value = { customNumber: 42 };
+
+			(service as any).addAdditionalPropertiesFromValue(rootGroup, value);
+
+			expect(rootGroup.fields['customNumber']).toBeDefined();
+			expect(rootGroup.fields['customNumber'].type).toBe(SchemaFieldType.Number);
+		});
+
+		it('should treat null value as string type', () => {
+			const schema: JsonSchema = {
+				type: 'object',
+				properties: {},
+				additionalProperties: true,
+			};
+			const rootGroup = service.schemaToFieldConfig(schema);
+			const value: any = { customNull: null };
+
+			(service as any).addAdditionalPropertiesFromValue(rootGroup, value);
+
+			expect(rootGroup.fields['customNull']).toBeDefined();
+			expect(rootGroup.fields['customNull'].type).toBe(SchemaFieldType.Text);
+		});
+
+		it('should skip existing fields', () => {
+			const schema: JsonSchema = {
+				type: 'object',
+				properties: {
+					existingField: { type: 'string' },
+				},
+				additionalProperties: true,
+			};
+			const rootGroup = service.schemaToFieldConfig(schema);
+			const value = { existingField: 'test', newField: 'new' };
+			jest.spyOn(service, 'addField');
+
+			(service as any).addAdditionalPropertiesFromValue(rootGroup, value);
+
+			// Should only be called once for newField, not for existingField
+			expect(service.addField).toHaveBeenCalledTimes(1);
+			expect(service.addField).toHaveBeenCalledWith(
+				{ type: 'string' },
+				rootGroup,
+				'newField',
+				undefined,
+				true,
+			);
+		});
+
+		it('should skip fields starting with underscore', () => {
+			const schema: JsonSchema = {
+				type: 'object',
+				properties: {},
+				additionalProperties: true,
+			};
+			const rootGroup = service.schemaToFieldConfig(schema);
+			const value = { _internalField: 'test', normalField: 'normal' };
+			jest.spyOn(service, 'addField');
+
+			(service as any).addAdditionalPropertiesFromValue(rootGroup, value);
+
+			// Should only be called once for normalField, not for _internalField
+			expect(service.addField).toHaveBeenCalledTimes(1);
+			expect(service.addField).toHaveBeenCalledWith(
+				{ type: 'string' },
+				rootGroup,
+				'normalField',
+				undefined,
+				true,
+			);
+		});
+
+		it('should skip array values', () => {
+			const schema: JsonSchema = {
+				type: 'object',
+				properties: {},
+				additionalProperties: true,
+			};
+			const rootGroup = service.schemaToFieldConfig(schema);
+			const value = { arrayField: ['a', 'b'], stringField: 'test' };
+			jest.spyOn(service, 'addField');
+
+			(service as any).addAdditionalPropertiesFromValue(rootGroup, value);
+
+			// Should only be called for stringField, not for arrayField
+			expect(service.addField).toHaveBeenCalledTimes(1);
+			expect(service.addField).toHaveBeenCalledWith(
+				{ type: 'string' },
+				rootGroup,
+				'stringField',
+				undefined,
+				true,
+			);
+		});
+
+		it('should skip object values', () => {
+			const schema: JsonSchema = {
+				type: 'object',
+				properties: {},
+				additionalProperties: true,
+			};
+			const rootGroup = service.schemaToFieldConfig(schema);
+			const value = { objectField: { nested: 'value' }, stringField: 'test' };
+			jest.spyOn(service, 'addField');
+
+			(service as any).addAdditionalPropertiesFromValue(rootGroup, value);
+
+			// Should only be called for stringField, not for objectField
+			expect(service.addField).toHaveBeenCalledTimes(1);
+			expect(service.addField).toHaveBeenCalledWith(
+				{ type: 'string' },
+				rootGroup,
+				'stringField',
+				undefined,
+				true,
+			);
+		});
+	});
+
+	describe('handleConditionalSchemaForPatch', () => {
+		it('should recursively prepare nested groups added by conditional schemas', done => {
+			const schema: JsonSchema = {
+				type: 'object',
+				properties: {
+					enableFeatures: { type: 'boolean' },
+				},
+				allOf: [
+					{
+						if: {
+							properties: { enableFeatures: { const: true } },
+						},
+						then: {
+							properties: {
+								features: {
+									type: 'object',
+									properties: {
+										feature1: { type: 'string' },
+										feature2: { type: 'string' },
+									},
+								},
+							},
+						},
+					},
+				],
+			};
+
+			const rootGroup = service.schemaToFieldConfig(schema);
+			const value = {
+				enableFeatures: true,
+				features: { feature1: 'test1', feature2: 'test2' },
+			};
+
+			const spy = jest.spyOn(service as any, 'prepareStructureForValue');
+
+			// Simulate conditional field being added
+			const enableFeaturesField = rootGroup.fields['enableFeatures'] as SchemaFieldConfig;
+			enableFeaturesField.controlRef.setValue(true);
+			setTimeout(() => {
+				const addedKeys = ['features'];
+				(service as any).handleConditionalSchemaForPatch(rootGroup, addedKeys, value);
+
+				expect(spy).toHaveBeenCalled();
+				done();
+			}, 0);
+		});
+
+		it('should handle oneOf in conditionally added groups', () => {
+			const rootGroup = service.schemaToFieldConfig(enablementSchema);
+			const value = {
+				status: 'FLAG_CONTROLLED',
+				flags: { featureFlag: 'test-flag' },
+			};
+
+			service.patchValue(rootGroup, value);
+
+			expect(rootGroup.fields['flags']).toBeDefined();
+			const flagsGroup = rootGroup.fields['flags'] as SchemaFieldGroup;
+			const radioKey = Object.keys(flagsGroup.fields).find(k => k.endsWith('oneOf-option'));
+			expect(radioKey).toBeDefined();
+
+			if (radioKey) {
+				const radioField = flagsGroup.fields[radioKey] as SchemaFieldConfig;
+				expect(radioField.controlRef.value).toBe('feature_flag');
+			}
+		});
+
+		it('should handle anyOf in conditionally added groups', () => {
+			const schema: JsonSchema = {
+				type: 'object',
+				properties: {
+					enableOptions: { type: 'boolean' },
+				},
+				allOf: [
+					{
+						if: {
+							properties: { enableOptions: { const: true } },
+						},
+						then: {
+							properties: {
+								options: {
+									anyOf: [
+										{
+											title: 'Option A',
+											properties: {
+												optionA: { type: 'string' },
+											},
+										},
+										{
+											title: 'Option B',
+											properties: {
+												optionB: { type: 'string' },
+											},
+										},
+									],
+								},
+							},
+						},
+					},
+				],
+			};
+
+			const rootGroup = service.schemaToFieldConfig(schema);
+			const value = {
+				enableOptions: true,
+				options: { optionA: 'valueA', optionB: 'valueB' },
+			};
+
+			jest.spyOn(service as any, 'selectAnyOfOptions');
+			service.patchValue(rootGroup, value);
+
+			expect((service as any).selectAnyOfOptions).toHaveBeenCalled();
+		});
+
+		it('should handle arrays in conditionally added fields', () => {
+			const schema: JsonSchema = {
+				type: 'object',
+				properties: {
+					hasItems: { type: 'boolean' },
+				},
+				allOf: [
+					{
+						if: {
+							properties: { hasItems: { const: true } },
+						},
+						then: {
+							properties: {
+								items: {
+									type: 'array',
+									items: { type: 'string' },
+								},
+							},
+						},
+					},
+				],
+			};
+
+			const rootGroup = service.schemaToFieldConfig(schema);
+			const value = {
+				hasItems: true,
+				items: ['item1', 'item2', 'item3'],
+			};
+
+			service.patchValue(rootGroup, value);
+
+			expect(rootGroup.fields['items']).toBeDefined();
+			const itemsArray = rootGroup.fields['items'] as SchemaFieldArray;
+			expect(itemsArray.items.length).toBe(3);
+		});
+
+		it('should handle oneOf radio fields added at parent level', () => {
+			const rootGroup = service.schemaToFieldConfig(simpleSchema);
+			const value = { option: 'value1' };
+
+			// Manually add a conditional oneOf radio field to simulate this scenario
+			const radioKey = '_test_oneOf-option';
+			const radioSchema: JsonSchema = { type: 'string' };
+			service.addField(radioSchema, rootGroup, radioKey, 0);
+			rootGroup.fields[radioKey].type = SchemaFieldType.Radio;
+			rootGroup.fields[radioKey].conditionalSchemas = [
+				{
+					triggerValue: 'option1',
+					schema: { properties: { field1: { type: 'string' } } },
+					addedKeys: ['field1'],
+				},
+			];
+
+			jest.spyOn(service as any, 'selectOneOfOption');
+			(service as any).handleConditionalSchemaForPatch(rootGroup, [radioKey], value);
+
+			expect((service as any).selectOneOfOption).toHaveBeenCalled();
+		});
+
+		it('should handle anyOf checkbox fields added at parent level', () => {
+			const rootGroup = service.schemaToFieldConfig(simpleSchema);
+			const value = { optionA: 'valueA' };
+
+			// Manually add conditional anyOf checkbox fields to simulate this scenario
+			const checkboxKey1 = 'test_anyOf-option_1';
+			const checkboxKey2 = 'test_anyOf-option_2';
+			const checkboxSchema: JsonSchema = { type: 'boolean' };
+
+			service.addField(checkboxSchema, rootGroup, checkboxKey1, 0);
+			rootGroup.fields[checkboxKey1].type = SchemaFieldType.Checkbox;
+
+			service.addField(checkboxSchema, rootGroup, checkboxKey2, 0);
+			rootGroup.fields[checkboxKey2].type = SchemaFieldType.Checkbox;
+
+			jest.spyOn(service as any, 'selectAnyOfOptions');
+			(service as any).handleConditionalSchemaForPatch(
+				rootGroup,
+				[checkboxKey1, checkboxKey2],
+				value,
+			);
+
+			expect((service as any).selectAnyOfOptions).toHaveBeenCalled();
+		});
+	});
+
+	describe('handleIfThenElseForPatch', () => {
+		it('should trigger handleConditionalSchemas to add fields', () => {
+			const rootGroup = service.schemaToFieldConfig(ifThenElseSchema);
+			const countryField = rootGroup.fields['country'] as SchemaFieldConfig;
+			const value = { country: 'USA' };
+
+			jest.spyOn(service as any, 'handleConditionalSchemas');
+
+			(service as any).handleIfThenElseForPatch(countryField, 'USA', rootGroup, value);
+
+			expect((service as any).handleConditionalSchemas).toHaveBeenCalledWith(
+				countryField,
+				'USA',
+				rootGroup,
+			);
+		});
+
+		it('should recursively prepare nested structures in added fields', () => {
+			const rootGroup = service.schemaToFieldConfig(ifThenElseSchema);
+			const countryField = rootGroup.fields['country'] as SchemaFieldConfig;
+			const value = { country: 'USA', state: 'CA' };
+
+			jest.spyOn(service as any, 'handleConditionalSchemaForPatch');
+
+			(service as any).handleIfThenElseForPatch(countryField, 'USA', rootGroup, value);
+
+			expect((service as any).handleConditionalSchemaForPatch).toHaveBeenCalled();
+		});
+
+		it('should set field value without emitting event', () => {
+			const rootGroup = service.schemaToFieldConfig(ifThenElseSchema);
+			const countryField = rootGroup.fields['country'] as SchemaFieldConfig;
+			const value = { country: 'USA' };
+
+			jest.spyOn(countryField.controlRef, 'setValue');
+
+			(service as any).handleIfThenElseForPatch(countryField, 'USA', rootGroup, value);
+
+			expect(countryField.controlRef.setValue).toHaveBeenCalledWith('USA', {
+				emitEvent: false,
 			});
+		});
+
+		it('should find matching conditional schema by trigger value', () => {
+			const rootGroup = service.schemaToFieldConfig(ifThenElseSchema);
+			const countryField = rootGroup.fields['country'] as SchemaFieldConfig;
+			const value = { country: 'USA', state: 'CA' };
+
+			(service as any).handleIfThenElseForPatch(countryField, 'USA', rootGroup, value);
+
+			// The 'state' field should be added
+			expect(rootGroup.fields['state']).toBeDefined();
+		});
+	});
+
+	describe('selectOneOfOption', () => {
+		it('should return early if radio field is not found', () => {
+			const rootGroup = service.schemaToFieldConfig(simpleSchema);
+			const value = { test: 'value' };
+
+			jest.spyOn(service as any, 'handleConditionalSchemas');
+
+			(service as any).selectOneOfOption(rootGroup, 'nonexistent_radio', value);
+
+			expect((service as any).handleConditionalSchemas).not.toHaveBeenCalled();
+		});
+
+		it('should return early if radio field has no conditional schemas', () => {
+			const rootGroup = service.schemaToFieldConfig(simpleSchema);
+			// Add a radio field without conditional schemas
+			const radioSchema: JsonSchema = { type: 'string' };
+			service.addField(radioSchema, rootGroup, 'testRadio', 0);
+			rootGroup.fields['testRadio'].type = SchemaFieldType.Radio;
+
+			const value = { test: 'value' };
+			jest.spyOn(service as any, 'handleConditionalSchemas');
+
+			(service as any).selectOneOfOption(rootGroup, 'testRadio', value);
+
+			expect((service as any).handleConditionalSchemas).not.toHaveBeenCalled();
+		});
+
+		it('should match value against oneOf schemas and select correct option', () => {
+			const rootGroup = service.schemaToFieldConfig(oneOfSchema);
+			const paymentGroup = rootGroup.fields['paymentMethod'] as SchemaFieldGroup;
+			const radioKey = '_paymentMethod_oneOf-option';
+			const value = {
+				cardNumber: '1234-5678',
+				cvv: '123',
+			};
+
+			jest.spyOn(service as any, 'valueMatchesSchema').mockReturnValue(true);
+
+			(service as any).selectOneOfOption(paymentGroup, radioKey, value);
+
+			expect((service as any).valueMatchesSchema).toHaveBeenCalled();
+		});
+
+		it('should set radio control value to the schema ID', () => {
+			const rootGroup = service.schemaToFieldConfig(oneOfSchema);
+			const paymentGroup = rootGroup.fields['paymentMethod'] as SchemaFieldGroup;
+			const radioKey = '_paymentMethod_oneOf-option';
+			const radioField = paymentGroup.fields[radioKey] as SchemaFieldConfig;
+			const value = {
+				cardNumber: '1234-5678',
+				cvv: '123',
+			};
+
+			jest.spyOn(radioField.controlRef, 'setValue');
+
+			(service as any).selectOneOfOption(paymentGroup, radioKey, value);
+
+			expect(radioField.controlRef.setValue).toHaveBeenCalledWith(expect.any(String), {
+				emitEvent: false,
+			});
+		});
+
+		it('should recursively prepare conditionally added fields', () => {
+			const rootGroup = service.schemaToFieldConfig(oneOfSchema);
+			const paymentGroup = rootGroup.fields['paymentMethod'] as SchemaFieldGroup;
+			const radioKey = '_paymentMethod_oneOf-option';
+			const value = {
+				cardNumber: '1234-5678',
+				cvv: '123',
+			};
+
+			jest.spyOn(service as any, 'handleConditionalSchemaForPatch');
+
+			(service as any).selectOneOfOption(paymentGroup, radioKey, value);
+
+			expect((service as any).handleConditionalSchemaForPatch).toHaveBeenCalled();
+		});
+	});
+
+	describe('selectAnyOfOptions', () => {
+		it('should skip checkbox if not found', () => {
+			const rootGroup = service.schemaToFieldConfig(simpleSchema);
+			const value = { test: 'value' };
+
+			jest.spyOn(service as any, 'handleConditionalSchemas');
+
+			(service as any).selectAnyOfOptions(rootGroup, ['nonexistent_checkbox'], value);
+
+			expect((service as any).handleConditionalSchemas).not.toHaveBeenCalled();
+		});
+
+		it('should skip checkbox if it has no conditional schemas', () => {
+			const rootGroup = service.schemaToFieldConfig(simpleSchema);
+			const checkboxSchema: JsonSchema = { type: 'boolean' };
+			service.addField(checkboxSchema, rootGroup, 'testCheckbox', 0);
+			rootGroup.fields['testCheckbox'].type = SchemaFieldType.Checkbox;
+
+			const value = { test: 'value' };
+			jest.spyOn(service as any, 'handleConditionalSchemas');
+
+			(service as any).selectAnyOfOptions(rootGroup, ['testCheckbox'], value);
+
+			expect((service as any).handleConditionalSchemas).not.toHaveBeenCalled();
+		});
+
+		it('should match value against anyOf schemas and check matching options', () => {
+			const rootGroup = service.schemaToFieldConfig(anyOfSchema);
+			const featuresGroup = rootGroup.fields['features'] as SchemaFieldGroup;
+			const checkboxKeys = Object.keys(featuresGroup.fields).filter(k =>
+				k.includes('anyOf-option'),
+			);
+			const value = {
+				optionA: 'value A',
+			};
+
+			jest.spyOn(service as any, 'valueMatchesSchema').mockReturnValue(true);
+
+			(service as any).selectAnyOfOptions(featuresGroup, checkboxKeys, value);
+
+			expect((service as any).valueMatchesSchema).toHaveBeenCalled();
+		});
+
+		it('should set checkbox control value to true for matching schemas', () => {
+			const rootGroup = service.schemaToFieldConfig(anyOfSchema);
+			const featuresGroup = rootGroup.fields['features'] as SchemaFieldGroup;
+			const checkboxKeys = Object.keys(featuresGroup.fields).filter(k =>
+				k.includes('anyOf-option'),
+			);
+			const firstCheckbox = featuresGroup.fields[checkboxKeys[0]] as SchemaFieldConfig;
+			const value = {
+				optionA: 'value A',
+			};
+
+			jest.spyOn(firstCheckbox.controlRef, 'setValue');
+			jest.spyOn(service as any, 'valueMatchesSchema')
+				.mockReturnValueOnce(true)
+				.mockReturnValueOnce(false);
+
+			(service as any).selectAnyOfOptions(featuresGroup, checkboxKeys, value);
+
+			expect(firstCheckbox.controlRef.setValue).toHaveBeenCalledWith(true, {
+				emitEvent: false,
+			});
+		});
+
+		it('should recursively prepare conditionally added fields', () => {
+			const rootGroup = service.schemaToFieldConfig(anyOfSchema);
+			const featuresGroup = rootGroup.fields['features'] as SchemaFieldGroup;
+			const checkboxKeys = Object.keys(featuresGroup.fields).filter(k =>
+				k.includes('anyOf-option'),
+			);
+			const value = {
+				optionA: 'value A',
+			};
+
+			jest.spyOn(service as any, 'handleConditionalSchemaForPatch');
+			jest.spyOn(service as any, 'valueMatchesSchema')
+				.mockReturnValueOnce(true)
+				.mockReturnValueOnce(false);
+
+			(service as any).selectAnyOfOptions(featuresGroup, checkboxKeys, value);
+
+			expect((service as any).handleConditionalSchemaForPatch).toHaveBeenCalled();
+		});
+	});
+
+	describe('valueMatchesSchema', () => {
+		it('should return false if schema is null', () => {
+			const value = { test: 'value' };
+			const result = (service as any).valueMatchesSchema(value, null);
+
+			expect(result).toBe(false);
+		});
+
+		it('should return false if value is null', () => {
+			const schema: JsonSchema = { type: 'object', properties: {} };
+			const result = (service as any).valueMatchesSchema(null, schema);
+
+			expect(result).toBe(false);
+		});
+
+		it('should return false if value is not an object', () => {
+			const schema: JsonSchema = { type: 'object', properties: {} };
+			const result = (service as any).valueMatchesSchema('string', schema);
+
+			expect(result).toBe(false);
+		});
+
+		it('should resolve $ref and match against resolved schema', () => {
+			service.defsMap.set('testDef', {
+				type: 'object',
+				properties: {
+					testField: { type: 'string', const: 'testValue' },
+				},
+			});
+
+			const schema: JsonSchema = { $ref: '#/$defs/testDef' };
+			const value = { testField: 'testValue' };
+
+			const result = (service as any).valueMatchesSchema(value, schema);
+
+			expect(result).toBe(true);
+		});
+
+		it('should return false if $ref cannot be resolved', () => {
+			const schema: JsonSchema = { $ref: '#/$defs/nonexistent' };
+			const value = { test: 'value' };
+
+			const result = (service as any).valueMatchesSchema(value, schema);
+
+			expect(result).toBe(false);
+		});
+
+		it('should match using discriminator (const property)', () => {
+			const schema: JsonSchema = {
+				type: 'object',
+				properties: {
+					type: { type: 'string', const: 'credit_card' },
+					cardNumber: { type: 'string' },
+				},
+			};
+			const value = {
+				type: 'credit_card',
+				cardNumber: '1234',
+			};
+
+			const result = (service as any).valueMatchesSchema(value, schema);
+
+			expect(result).toBe(true);
+		});
+
+		it('should return false if discriminator does not match', () => {
+			const schema: JsonSchema = {
+				type: 'object',
+				properties: {
+					type: { type: 'string', const: 'credit_card' },
+				},
+			};
+			const value = {
+				type: 'bank_transfer',
+			};
+
+			const result = (service as any).valueMatchesSchema(value, schema);
+
+			expect(result).toBe(false);
+		});
+
+		it('should match using required properties', () => {
+			const schema: JsonSchema = {
+				type: 'object',
+				properties: {
+					cardNumber: { type: 'string' },
+					cvv: { type: 'string' },
+				},
+				required: ['cardNumber', 'cvv'],
+			};
+			const value = {
+				cardNumber: '1234',
+				cvv: '123',
+			};
+
+			const result = (service as any).valueMatchesSchema(value, schema);
+
+			expect(result).toBe(true);
+		});
+
+		it('should return false if required properties are missing', () => {
+			const schema: JsonSchema = {
+				type: 'object',
+				properties: {
+					cardNumber: { type: 'string' },
+					cvv: { type: 'string' },
+				},
+				required: ['cardNumber', 'cvv'],
+			};
+			const value = {
+				cardNumber: '1234',
+			};
+
+			const result = (service as any).valueMatchesSchema(value, schema);
+
+			expect(result).toBe(false);
+		});
+
+		it('should fallback to matching any property if no required fields', () => {
+			const schema: JsonSchema = {
+				type: 'object',
+				properties: {
+					optionA: { type: 'string' },
+					optionB: { type: 'string' },
+				},
+			};
+			const value = {
+				optionA: 'valueA',
+			};
+
+			const result = (service as any).valueMatchesSchema(value, schema);
+
+			expect(result).toBe(true);
+		});
+
+		it('should return false if value has none of the schema properties', () => {
+			const schema: JsonSchema = {
+				type: 'object',
+				properties: {
+					optionA: { type: 'string' },
+					optionB: { type: 'string' },
+				},
+			};
+			const value = {
+				optionC: 'valueC',
+			};
+
+			const result = (service as any).valueMatchesSchema(value, schema);
+
+			expect(result).toBe(false);
+		});
+
+		it('should return true if no specific matching criteria', () => {
+			const schema: JsonSchema = { type: 'object' };
+			const value = { anything: 'goes' };
+
+			const result = (service as any).valueMatchesSchema(value, schema);
+
+			expect(result).toBe(true);
+		});
+	});
+
+	describe('patchValue integration tests', () => {
+		it('should select correct oneOf option for conditionally added field', () => {
+			const rootGroup = service.schemaToFieldConfig(ifThenElseSchema);
+			const value = {
+				country: 'USA',
+				state: 'CA',
+			};
+			service.patchValue(rootGroup, value);
+
+			// The state field should be added by the if/then conditional
+			expect(rootGroup.fields['state']).toBeDefined();
+			// The state field control should have the value patched
+			const stateField = rootGroup.fields['state'] as SchemaFieldConfig;
+			expect(stateField.controlRef.value).toBe('CA');
+		});
+
+		it('should select correct oneOf option when patching nested oneOf in conditional fields', () => {
+			// Create a schema with if/then that adds a oneOf field
+			const schema: JsonSchema = {
+				type: 'object',
+				properties: {
+					status: {
+						type: 'string',
+						enum: ['FLAG_CONTROLLED', 'ENABLED'],
+					},
+				},
+				allOf: [
+					{
+						if: {
+							properties: {
+								status: {
+									const: 'FLAG_CONTROLLED',
+								},
+							},
+						},
+						then: {
+							properties: {
+								flags: {
+									oneOf: [
+										{
+											title: 'Product flag',
+											properties: {
+												productFlag: {
+													type: 'string',
+												},
+											},
+											required: ['productFlag'],
+										},
+										{
+											title: 'Feature flag',
+											properties: {
+												featureFlag: {
+													type: 'string',
+												},
+											},
+											required: ['featureFlag'],
+										},
+									],
+								},
+							},
+							required: ['flags'],
+						},
+					},
+				],
+			};
+
+			const rootGroup = service.schemaToFieldConfig(schema);
+
+			const value = {
+				status: 'FLAG_CONTROLLED',
+				flags: {
+					featureFlag: 'test-flag',
+				},
+			};
+			service.patchValue(rootGroup, value);
+
+			expect(rootGroup.fields['flags']).toBeDefined();
+
+			const flagsGroup = rootGroup.fields['flags'] as SchemaFieldGroup;
+			const radioKey = Object.keys(flagsGroup.fields).find(k => k.endsWith('oneOf-option'));
+			expect(radioKey).toBeDefined();
+
+			if (radioKey) {
+				const radioField = flagsGroup.fields[radioKey] as SchemaFieldConfig;
+				expect(radioField.controlRef.value).toBe('feature_flag');
+				expect(flagsGroup.fields['featureFlag']).toBeDefined();
+			}
 		});
 	});
 
